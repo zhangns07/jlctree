@@ -95,8 +95,10 @@ for (sim in c(1:Nsim)){
                            ret <- cbind(ID=i, X1=rep(X[i,1],num_i),
                                         X2=rep(X[i,2],num_i), X3=rep(X[i,3],num_i),
                                         X4=rep(X[i,4],num_i), X5=rep(X[i,5],num_i),
-                                        time_L=tmp_time[1:num_i],time_Y=tmp_time[-1],
-                                        delta=c(rep(0,num_i-1),delta[i])) })
+                                        #time_L=tmp_time[1:num_i],time_Y=tmp_time[-1],
+                                        #delta=c(rep(0,num_i-1),delta[i])) })
+                                        time_L=rep(time_L[i],num_i),time_Y=rep(time_Y[i],num_i),
+                                        delta=rep(delta[i],num_i)) })
 
 
     ranef <- rnorm(Nsub, sd=sd_ranef)
