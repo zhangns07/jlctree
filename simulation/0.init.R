@@ -41,7 +41,7 @@ surve <- function
         }
     }
 
-    node_val <- get_node_val(formulay1, formulay2, y, test_stat= parms$test_stat)
+    node_val <- get_node_val(formulay1, formulay2, y, test_stat=parms$test_stat)
     list(label = node_val, deviance = node_val)
     # deviance: it should be closely related to the split criteria.
     # label: does not matter, but we use node_val here.
@@ -239,9 +239,10 @@ survs_v3<- function
 
     if (is.null(parms$min_nevent)){ parms$min_nevent <- 1 }
     if (is.null(parms$stop_thre)){ parms$stop_thre <- 1 } # expected Chi_1
+    if (is.null(parms$stable)){ parms$stable <- FALSE }
 
     nevents <- sum(y[,'event'])
-    root_val <- get_node_val(formulay1, formulay2, y, test_stat= parms$test_stat)
+    root_val <- get_node_val(formulay1, formulay2, y, test_stat=parms$test_stat, stable=parms$stable)
 
     if (nevents <= parms$min_nevent*2 | root_val < parms$stop_thre){
         if (continuous){
@@ -264,8 +265,8 @@ survs_v3<- function
                         result <- c(0,0)
                     } else{
                         result <- tryCatch({
-                            left_val <- get_node_val(formulay1, formulay2, y[1:i,], test_stat= parms$test_stat)
-                            right_val <- get_node_val(formulay1, formulay2, y[(i+1):n,], test_stat= parms$test_stat)
+                            left_val <- get_node_val(formulay1, formulay2, y[1:i,], test_stat= parms$test_stat, stable=parms$stable)
+                            right_val <- get_node_val(formulay1, formulay2, y[(i+1):n,], test_stat= parms$test_stat, stable=parms$stable)
                             get_split_utility(root_val, left_val, right_val, parms$test_stat)
                         }, error = function(e){ c(0, sign(1))})#, warning = function(w){c(0,sign(0))})
                     }
@@ -290,8 +291,8 @@ survs_v3<- function
                     result <- c(0,0)
                 } else{
                     result <- tryCatch({
-                        left_val <- get_node_val(formulay1, formulay2, y[1:(next_start-1),], test_stat= parms$test_stat)
-                        right_val <- get_node_val(formulay1, formulay2, y[next_start:n,], test_stat= parms$test_stat)
+                        left_val <- get_node_val(formulay1, formulay2, y[1:(next_start-1),], test_stat= parms$test_stat, stable=parms$stable)
+                        right_val <- get_node_val(formulay1, formulay2, y[next_start:n,], test_stat= parms$test_stat, stable=parms$stable)
                         get_split_utility(root_val, left_val, right_val, parms$test_stat)
                     }, error = function(e){ c(0, sign(1))})#, warning = function(w){c(0,sign(0))})
                 }
@@ -319,16 +320,18 @@ get_node_val_OLD <- function
 
 get_node_val<- function
 (f1,f2,data, 
- test_stat = c('rsq','lrt','wald')[2]){
+ test_stat=c('rsq','lrt','wald')[2],
+ stable=FALSE){
     if (test_stat == 'rsq'){
         ret <- get_rsquare(f1, data)
     } else if (test_stat=='lrt'){
-        ret <- get_loglik_diff(f1, f2, data)
+        ret <- get_loglik_diff(f1, f2, data, stable)
     } else if (test_stat=='wald'){
         ret <- get_wald(f2, data)
     }
     return (ret)
 }
+
 
 get_wald <- function(f, data){
     ret <- tryCatch({
@@ -352,7 +355,7 @@ get_rsquare <- function(f, data){
 }
 
 
-get_loglik_diff <- function(f1, f2, data){
+get_loglik_diff <- function(f1, f2, data, stable=FALSE){
     ret <- tryCatch({
         bo<-0
         while(bo!=10){
@@ -374,14 +377,12 @@ get_loglik_diff <- function(f1, f2, data){
 
         loglik_diff <- 2*(coxml2$loglik[2] - coxml1$loglik[2] )
 
-#        if (loglik_diff < threshold){
-#            RET <- rep(0,5)
-#            for (i in seq_len(5)){
-#                reorder <- sample(seq_len(nrow(data)),replace = FALSE)
-#                RET[i]<-get_loglik_diff(f1, f2, data[reorder,])
-#            }
-#            loglik_diff <- median(RET)
-#        }
+        if(stable){
+            if (max(c(diag(coxml1$var), diag(coxml2$var))) > 1e5){
+                loglik_diff <- Inf
+            }
+        }
+
         max(0,loglik_diff)
     }, error = function(e){Inf}) # Inf, thus the parent node will not split to this childnode
 
@@ -712,3 +713,6 @@ eval_lcmm_pred<- function
 
     return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y, purity=purity),4))
 }
+
+
+
