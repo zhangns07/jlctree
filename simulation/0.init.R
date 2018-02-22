@@ -22,6 +22,8 @@ survi<- function
 
 surve <- function
 (y, wt, parms){
+
+    if (is.null(parms$stable)){ parms$stable <- FALSE }
     y = data.frame(y)
     if (parms$LTRC){
         colnames(y)[1:4] <- c('start','end','event','biomarker')
@@ -41,7 +43,7 @@ surve <- function
         }
     }
 
-    node_val <- get_node_val(formulay1, formulay2, y, test_stat=parms$test_stat)
+    node_val <- get_node_val(formulay1, formulay2, y, test_stat=parms$test_stat, stable=parms$stable)
     list(label = node_val, deviance = node_val)
     # deviance: it should be closely related to the split criteria.
     # label: does not matter, but we use node_val here.
