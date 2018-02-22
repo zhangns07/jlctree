@@ -667,9 +667,11 @@ eval_lcmm_pred<- function
 
 
     #  coeff
+    nclasses <- ncol(mod$pprob)-2
     coefs <- mod$best
-    coefstart <- 27
-    pred_slopes <- matrix(coefs[coefstart:(coefstart+11)],nrow=4,ncol=3)
+    coefstart <- max(which(grepl('Weibull',names(coefs))))+1
+    #coefstart <- 27
+    pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses,ncol=3)
 
     predclass <- (mod$pprob$class)[data$ID]
     pred_parms <- pred_slopes[predclass,]
