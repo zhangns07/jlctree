@@ -158,3 +158,16 @@ for (sim in c(1:Nsim)){
     filename <- paste0(FLAGS$outdir,'/simret_model32/',basefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
+
+if (1==0){
+    y <-data.table(data)[X1 < 0.5 & X2 > 0.5, list(time_L, time_Y,delta,y,X3,X4,X5)]
+    x <- y$X4
+    xorder <- order(x); x <- x[xorder];y <-y[xorder,]
+    parms=list(LTRC=1, test_stat=FLAGS$test, stop_thre=stop_thre, min_nevent=4,stable=TRUE)
+    tmp <- survs_v3(y,rep(1,length(x)),x,parms,FALSE)
+
+}
+
+
+
+
