@@ -115,6 +115,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     ranefs <- ranef[LTRC_data$ID]
     y <- LTRC_data$X1 + LTRC_data$X2 + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
     data <- cbind(LTRC_data,y)
+    pseudo_g <- g[data$ID]
 
     m1 <- Jointlcmm(fixed=y~X1+X2+X3+X4+X5,
                     subject='ID',
@@ -162,7 +163,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     best_ng <- which.min(BICs)
     mod <- get(paste0('m',best_ng))
     runtime <- round(difftime(tok,tik,units='secs'),4)
-    RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6], eval_lcmm_pred(data,dist,slopes,parms,mod))
+    RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6], eval_lcmm_pred(data,dist,slopes,parms,mod,g=pseudo_g))
     RET_iter <- RET_iter+1
 
     cat('sim: ',sim,'\n')

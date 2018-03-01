@@ -434,151 +434,12 @@ independence_score <- function(gidx, newdata, LTRC){
 }
 
 
-# This function is wrong.
-#get_IBS <- function(surv, pred){
-#    times <- surv[,1]
-#    N <- length(times)
-#    scores <- apply(array(times),1,function(x){sbrier(surv, pred, x)})
-#    torder <- order(times)
-#    scores <- scores[torder]; times <- times[torder]
-#
-#    IBS <- sum(0.5*(scores[-1]+scores[-N]) * (times[-1]-times[-N] )) / (max(times)-min(times))
-#    return (IBS)
-#}
-#
-
-eval_tree_pred_OLD<- function # for y not longituindal
-(data,dist, slopes, parms, node_idx){
-    Nsub <- nrow(data)
-    g <- 2*(data$X1)+data$X2+1
-    ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
-
-    # ---------- Survival Prediction 
-    # get true survival prob
-    pred_parms <- matrix(0,nrow=Nsub,ncol=3)
-    true_parms <- slopes[g,]
-
-    # get predicted survival prob
-    d_idx <- node_idx
-    formula <-Surv(time_L,time_Y,delta) ~ X3+X4+X5
-
-    times_order <- order(data$time_Y)
-    times <- data$time_Y[times_order]
-    ntimes <- length(times)
-    ISE <- 0
-    SURVS <- matrix(0,nrow=ntimes,ncol=nrow(data))
-
-    for (i in unique(d_idx)){
-        subset_id <- d_idx== i
-        tmpdata <- data[subset_id,]
-        bo<-0
-        while(bo!=10){
-            mod  <- try(coxph(formula, tmpdata),silent=TRUE)
-            if (class(mod)=="try-error") {
-                bo <- bo+1
-                tmpdata <- tmpdata[sample(c(1:nrow(tmpdata)),replace = TRUE),]
-            } else break 
-        }
-
-        for (x in c(1:nrow(tmpdata))){
-            Shat <- getsurv(survfit(mod,newdata=tmpdata[x,]),times)
-            org_idx <- seq_along(subset_id)[subset_id][x]
-            SURVS[,org_idx] <- Shat
-
-            tmpg <- 2*(tmpdata[x,'X1'])+tmpdata[x,'X2']+1
-            tmpebx <- exp(sum(slopes[tmpg,] * tmpdata[x,c('X3','X4','X5')]))
-            if (dist=='exponential'){
-                Strue <- exp(-tmpebx*times*parms$lambda)
-            } else if (dist=='weibulld' | dist=='weibulli'){
-                Strue <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
-            }
-
-            scores <- (Shat - Strue)^2
-            SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(times)) / diff(range(times))
-            ISE <- ISE + SE
-        }
-
-        pred_parms[subset_id,] <- rep(mod$coefficients,each=sum(subset_id))
-    }
-
-    surv <- Surv(data$time_Y, data$delta)
-    IBS_pred <- sbrier(surv, SURVS)[1,1]
-    ISE <- ISE/Nsub
-
-    pred_parms[is.na(pred_parms)] <- 0
-    MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
-
-    # ---------- Biomarker Prediction
-    pred_y<- rep(0,Nsub)
-    pred_ef <- matrix(0,ncol=2, nrow=Nsub)
-    true_ef <- cbind(data$X1+data$X2, data$y - data$X1-data$X2)
-
-    d_idx <- node_idx
-    for (i in unique(d_idx)){
-        subset_id <- d_idx== i
-        tmpdata <- data[subset_id,]
-        alp_d <- mean(tmpdata$y)
-        beta_i  <- tmpdata$y - alp_d
-        pred_ef[subset_id,] <- cbind(rep(alp_d,sum(subset_id)), beta_i)
-    }
-    MSE_beta <- mean(rowSums((true_ef- pred_ef)^2))
-
-    return(c(ISE=ISE,IBS_pred=IBS_pred,MSE_b=MSE_b,MSE_beta=MSE_beta))
-}
-
-eval_lcmm_pred_OLD <- function
-(data, dist, slopes, parms, mod){
-    Nsub <- nrow(data)
-    g <- 2*(data$X1)+data$X2+1
-    true_parms <- slopes[g,]
-    ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
-
-    #  coeff
-    coefs <- mod$best
-    coefstart <- 27
-    pred_slopes <- matrix(coefs[coefstart:(coefstart+11)],nrow=4,ncol=3)
-
-    predclass <- mod$pprob$class
-    pred_parms <- pred_slopes[predclass,]
-    MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
-
-    # Shat
-    times <- mod$predSurv[,1]
-    ntimes <- length(times)
-    ISE <- 0
-
-    for (x in c(1:nrow(data))){
-        tmpclass <- mod$pprob$class[x]
-        tmpebx <- exp(sum(pred_slopes[tmpclass,] * data[x,c('X3','X4','X5')]))
-        Shat <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpclass)])
-
-        tmpg <- g[x]
-        tmpebx <- exp(sum(slopes[tmpg,] * data[x,c('X3','X4','X5')]))
-        if (dist=='exponential'){
-            Strue <- exp(-tmpebx*times*parms$lambda)
-        } else if (dist=='weibulld' | dist=='weibulli'){
-            Strue <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
-        }
-
-        scores <- (Shat - Strue)^2
-        SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(times)) / diff(range(times))
-        ISE <- ISE + SE
-    }
-
-    ISE <- ISE/Nsub
-
-    # ---------- Biomarker Prediction
-    pred_y <- mod$pred$pred_ss
-    MSE_beta <- mean((pred_y - data$y)^2)
-
-    return(c(ISE=ISE,MSE_b=MSE_b,MSE_beta=MSE_beta))
-}
-
-
 eval_tree_pred<- function
-(data,dist, slopes, parms, node_idx){
+(data,dist, slopes, parms, node_idx, g=NULL){
     Nsub_pseudo  <- nrow(data)
-    g <- 2*(data$X1)+data$X2+1
+    if (is.null(g)){
+        g <- 2*(data$X1)+data$X2+1
+    } 
     ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
 
     # ---------- Survival Prediction 
@@ -624,7 +485,8 @@ eval_tree_pred<- function
                 Shat <- getsurv(survfit(mod),timessub)
             }
 
-            tmpg <- 2*(tmpdata[x,'X1'])+tmpdata[x,'X2']+1
+            #tmpg <- 2*(tmpdata[x,'X1'])+tmpdata[x,'X2']+1
+            tmpg <- g[subset_id][x]
             tmpebx <- exp(sum(slopes[tmpg,] * tmpdata[x,c('X3','X4','X5')]))
             if (dist=='exponential'){
                 Strue <- exp(-tmpebx*timessub*parms$lambda)
@@ -662,9 +524,11 @@ eval_tree_pred<- function
 }
 
 eval_lcmm_pred<- function
-(data, dist, slopes, parms, mod){
+(data, dist, slopes, parms, mod,g=NULL){
     Nsub_pseudo<- nrow(data)
-    g <- 2*(data$X1)+data$X2+1
+    if(is.null(g)){
+        g <- 2*(data$X1)+data$X2+1
+    }
     true_parms <- slopes[g,]
     ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
 
@@ -673,7 +537,6 @@ eval_lcmm_pred<- function
     nclasses <- ncol(mod$pprob)-2
     coefs <- mod$best
     coefstart <- max(which(grepl('Weibull',names(coefs))))+1
-    #coefstart <- 27
     pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses,ncol=3)
 
     predclass <- (mod$pprob$class)[data$ID]

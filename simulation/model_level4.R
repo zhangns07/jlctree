@@ -130,8 +130,9 @@ for (sim in c(1:Nsim)){
                                method=survlist, 
                                parms=list(LTRC=1, test_stat=FLAGS$test, stop_thre=stop_thre, min_nevent=4,stable=TRUE))
 
+        pseudo_g <- g[data$ID]
         nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
-        RET[RET_iter,] <- c(sim,k=-Inf, nsplit,eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where))
+        RET[RET_iter,] <- c(sim,k=-Inf, nsplit,eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
         RET_iter <- RET_iter+1
 
         xfit <- xpred.rpart(cond_ind_tree, xval=5)
@@ -151,7 +152,7 @@ for (sim in c(1:Nsim)){
                 RET[RET_iter,] <- RET[RET_iter-1,]
                 RET[RET_iter,2] <- kse
             } else {
-                RET[RET_iter,] <- c(sim,k=kse, nsplit_prune, eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where))
+                RET[RET_iter,] <- c(sim,k=kse, nsplit_prune, eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where,g=pseudo_g))
             }
             RET_iter <- RET_iter+1
 
