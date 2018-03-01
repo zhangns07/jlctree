@@ -121,7 +121,7 @@ for (sim in c(1:Nsim)){
     data <- cbind(LTRC_data,y)
 
     if (FLAGS$stop_thre==-1){
-        RET[RET_iter,] <- c(sim,k=-Inf, nsplit=-1, eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data))))
+        RET[RET_iter,] <- c(sim,k=-Inf, nsplit=-1, eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
         RET_iter <- RET_iter+1
     } else {
         cond_ind_tree <- rpart(model.frame
