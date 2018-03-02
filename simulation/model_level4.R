@@ -119,6 +119,7 @@ for (sim in c(1:Nsim)){
     ranefs <- ranef[LTRC_data$ID]
     y <- LTRC_data$X1 + LTRC_data$X2 + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
     data <- cbind(LTRC_data,y)
+    pseudo_g <- g[data$ID]
 
     if (FLAGS$stop_thre==-1){
         RET[RET_iter,] <- c(sim,k=-Inf, nsplit=-1, eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
@@ -130,7 +131,6 @@ for (sim in c(1:Nsim)){
                                method=survlist, 
                                parms=list(LTRC=1, test_stat=FLAGS$test, stop_thre=stop_thre, min_nevent=4,stable=TRUE))
 
-        pseudo_g <- g[data$ID]
         nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
         RET[RET_iter,] <- c(sim,k=-Inf, nsplit,eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
         RET_iter <- RET_iter+1
@@ -158,7 +158,7 @@ for (sim in c(1:Nsim)){
 
         }
         Rfilename <- paste0(FLAGS$outdir,'/simret_model4_RData/',basefilename,'_sim_',sim,'.RData')
-        save(cond_ind_tree, file=Rfilename)
+        save(cond_ind_tree, cptable, file=Rfilename)
     }
 
     cat('sim: ',sim,'\n')
