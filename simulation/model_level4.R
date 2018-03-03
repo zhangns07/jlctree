@@ -1,3 +1,4 @@
+# TODO: longitudinal outcomes should only depend on g.
 # model4: lcmm 
 # with y being longitudinal
 # with stable=TRUE
@@ -59,11 +60,11 @@ opt2$stable <- ''
 basefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
 
 if (FLAGS$stop_thre==-1){
-    RET <- matrix(0,ncol=7,nrow=Nsim)
+    RET <- matrix(0,ncol=8,nrow=Nsim)
 } else {
-    RET <- matrix(0,ncol=7,nrow=Nsim*5)
+    RET <- matrix(0,ncol=8,nrow=Nsim*5)
 }
-colnames(RET) <- c('sim','k','nsplit','ISE','MSE_b','MSE_y','purity')
+colnames(RET) <- c('sim','k','runtime','nsplit','ISE','MSE_b','MSE_y','purity')
 RET_iter <- 1
 
 W <- matrix(c( -1,-1, -1,1,1,-1,1,1),ncol=2,byrow=TRUE)
@@ -117,23 +118,21 @@ for (sim in c(1:Nsim)){
 
     ranef <- rnorm(Nsub, sd=sd_ranef)
     ranefs <- ranef[LTRC_data$ID]
-    y <- LTRC_data$X1 + LTRC_data$X2 + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
+    fixef <- c(0,1,1,2)
+    pseudo_g <- g[LTRC_data$ID]
+    y <- fixef[pseudo_g] + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
     data <- cbind(LTRC_data,y)
-    pseudo_g <- g[data$ID]
 
     if (FLAGS$stop_thre==-1){
-        RET[RET_iter,] <- c(sim,k=-Inf, nsplit=-1, eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
+        RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
         RET_iter <- RET_iter+1
     } else {
+        tik <- Sys.time()
         cond_ind_tree <- rpart(model.frame
                                (cbind(time_L,time_Y,delta,y,X3,X4,X5)~X1+X2+X3+X4+X5,
                                 data = data), control=rpart.control(minsplit=5),
                                method=survlist, 
                                parms=list(LTRC=1, test_stat=FLAGS$test, stop_thre=stop_thre, min_nevent=4,stable=TRUE))
-
-        nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
-        RET[RET_iter,] <- c(sim,k=-Inf, nsplit,eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
-        RET_iter <- RET_iter+1
 
         xfit <- xpred.rpart(cond_ind_tree, xval=5)
         xerror <- apply(xfit,2,mean)
@@ -142,6 +141,12 @@ for (sim in c(1:Nsim)){
 
         cventry <- which.min(cptable[, "xerror"])
         xerrorcv <- cptable[cventry, "xerror"]
+        tok <- Sys.time()
+        runtime <- round(difftime(tok,tik,units='secs'),4)
+
+        nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
+        RET[RET_iter,] <- c(sim,k=-Inf, runtime, nsplit,eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
+        RET_iter <- RET_iter+1
 
         for (kse in c(0:3)){
             sexerrorcv <- xerrorcv + kse*cptable[cventry, "xstd"] 
@@ -152,7 +157,7 @@ for (sim in c(1:Nsim)){
                 RET[RET_iter,] <- RET[RET_iter-1,]
                 RET[RET_iter,2] <- kse
             } else {
-                RET[RET_iter,] <- c(sim,k=kse, nsplit_prune, eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where,g=pseudo_g))
+                RET[RET_iter,] <- c(sim,k=kse, runtime, nsplit_prune, eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where,g=pseudo_g))
             }
             RET_iter <- RET_iter+1
 

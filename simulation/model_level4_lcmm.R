@@ -113,15 +113,15 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
 
     ranef <- rnorm(Nsub, sd=sd_ranef)
     ranefs <- ranef[LTRC_data$ID]
-    y <- LTRC_data$X1 + LTRC_data$X2 + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
+    fixef <- c(0,1,1,2)
+    pseudo_g <- g[LTRC_data$ID]
+    y <- fixef[pseudo_g] + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
     data <- cbind(LTRC_data,y)
-    pseudo_g <- g[data$ID]
 
     m1 <- Jointlcmm(fixed=y~X1+X2+X3+X4+X5,
                     subject='ID',
                     survival = Surv(time_L,time_Y,delta)~X3+X4+X5,
                     hazard="Weibull",hazardtype="Specific",ng=1,data=data)
-
 
     BICs <- rep(Inf, 6)
     initB <- rep(1,6)#1:B=m1; 2:B=NULL; 3:B=random(m1); 4:none worked
@@ -136,7 +136,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
             mod <- Jointlcmm(fixed=y~X1+X2+X3+X4+X5,mixture=~1,
                             classmb=~X1+X2+X3+X4+X5,subject='ID',
                             survival = Surv(time_L,time_Y,delta)~mixture(X3+X4+X5),
-                            hazard="Weibull",hazardtype="Specific",ng=ng,data=data,maxiter=30)
+                            hazard="Weibull",hazardtype="Specific",ng=ng,data=data)#,maxiter=30)
             initB[ng] <- 2
         }
 
@@ -144,7 +144,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
             mod <- Jointlcmm(fixed=y~X1+X2+X3+X4+X5,mixture=~1,
                             classmb=~X1+X2+X3+X4+X5,subject='ID',
                             survival = Surv(time_L,time_Y,delta)~mixture(X3+X4+X5),
-                            hazard="Weibull",hazardtype="Specific",ng=ng,data=data,B=random(m1),maxiter=30)
+                            hazard="Weibull",hazardtype="Specific",ng=ng,data=data,B=random(m1))#,maxiter=30)
             initB[ng] <- 3
         }
 
