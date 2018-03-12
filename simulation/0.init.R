@@ -492,7 +492,11 @@ eval_tree_pred<- function
                 Strue <- exp(-tmpebx*timessub*parms$lambda)
             } else if (dist=='weibulld' | dist=='weibulli'){
                 Strue <- exp(-(timessub/parms$beta)^(parms$alp) * tmpebx)
+            } else if (dist=='lognormal'){
+                tmpparms <- parms[tmpg,]
+                Strue <- exp(tmpebx)*(1-pnorm((log(timessub)-tmpparms[1])/tmpparms[2]))
             }
+
 
             scores <- (Shat - Strue)^2
             SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(timessub)) / diff(range(timessub))
@@ -563,6 +567,9 @@ eval_lcmm_pred<- function
             Strue <- exp(-tmpebx*times*parms$lambda)
         } else if (dist=='weibulld' | dist=='weibulli'){
             Strue <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
+        } else if (dist=='lognormal'){
+            tmpparms <- parms[tmpg,]
+            Strue <- exp(tmpebx)*(1-pnorm((log(times)-tmpparms[1])/tmpparms[2]))
         }
 
         scores <- (Shat - Strue)^2
@@ -580,4 +587,74 @@ eval_lcmm_pred<- function
 }
 
 
+get_parms <- function(dist){
+    parms <- switch(dist,
+                    exponential=list(lambda=0.1),
+                    weibulld=list(alp=0.9, beta=1),
+                    weibulli=list(alp=3, beta=2),
+                    lognormal=matrix(c(2,0.3,1.7,0.2,1.3,0.3,0.5,0.5),byrow=TRUE,ncol=2))
 
+    slopes <- switch(dist,
+                     exponential=matrix(c(0,0,0,0.56,0.56,0.09,0.92,0.92,0.15,1.46,1.46,0.24),ncol=3,byrow=TRUE),
+                     weibulld=matrix(c(-1.17,-1.17,-0.19,-0.66,-0.66,-0.11,-0.55,-0.55,-0.09,0,0,0),ncol=3,byrow=TRUE),
+                     weibulli=matrix(c(-3.22,-3.22,-0.54,-2.26,-2.26,-0.38, -1.53,-1.53,-0.26, 0,0,0),ncol=3,byrow=TRUE),
+                     lognormal=matrix(rep(0,12),ncol=3))
+
+    lam_D <- switch(dist,
+                    exponential=list('0.2'=c(0.026,0.048,0.086,0.156),
+                                     '0.5'=c(0.114,0.232,0.396,0.74)),
+                    weibulld=list('0.2'=c(0.024,0.072,0.084,0.238),
+                                  '0.5'=c(0.13,0.318,0.384,0.956)),
+                    weibulli=list('0.2'=c(0.024,0.04,0.076,0.19),
+                                  '0.5'=c(0.084,0.168,0.224,0.64)),
+                    lognormal= list('0.2'=c(0.03,0.05,0.08, 0.15),
+                                    '0.5'=c(0.1,0.12,0.2,0.4)))
+
+
+    return (list(parms=parms, slopes=slopes, lam_D=lam_D))
+}
+
+get_latent_class <- function(X1,X2,struct,member,seed=0){
+    if (struct == 'tree'){
+        if (member == 'partition'){
+            g <- 2*(X1)+X2+1
+        } else if (member == 'multinomial'){
+            W <- matrix(c( -1,-1, -1,1,1,-1,1,1),ncol=2,byrow=TRUE)
+            g <- apply(cbind(X1,X2),1,function(x){
+                           weights <- exp(2*W %*% (x-0.5))
+                           weights <- weights/sum(weights)
+                           cumweights <- cumsum(weights)
+                           which(runif(1)  < cumweights)[1] })
+        }
+    } else if (struct == 'XOR'){# {(0,0), (1,1)} -> g = 4; {(1,0),(0,1)} -> g=1
+        if (member == 'partition'){
+            g <- (2*X1-1) * (2*X2-1)
+            g <- 1.5*g + 2.5
+        } else if (member == 'multinomial'){
+            W <- c(1,-1)
+            X <- (2*X1-1)*(2*X2-1)
+            g <- apply(array(X),1,function(x){
+                           weights <- exp(x * W)
+                           weights <- weights/sum(weights)
+                           cumweights <- cumsum(weights)
+                           which(runif(1)  < cumweights)[1] })
+            g <- ifelse(g==2,1,4)
+        }
+
+    } else if (struct == 'linear'){
+        if (member == 'partition'){# roughly ensure sample number per group
+            W <- c(0.3, -0.5, 0.7)
+            val <- W[1] + W[2]*X1 + W[3]*X2
+            thres <- c(0.05, 0.55,1.25, Inf)
+            g <- apply(array(val),1,function(x){which(x<thres)[1]})
+        } else if (member == 'multinomial'){
+            W <- matrix(c(0.8,-0.6,0.9,0.5,-0.8,0.6,0.5,0.9),byrow=TRUE,ncol=2) # random sample from sphere
+            g <- apply(cbind(X1,X2),1,function(x){
+                           weights <- exp(W %*% (x-2))
+                           weights <- weights/sum(weights)
+                           cumweights <- cumsum(weights)
+                           which(runif(1)  < cumweights)[1] })
+        }
+    } 
+    return (g)
+}

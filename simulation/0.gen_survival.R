@@ -104,15 +104,21 @@ gen_vary_survival_II <- function
 
 gen_model3_survival <- function
 (ebx, #exp(beta^T x) 
- dist=c('exponential','weibulld','weibulli')[1],#,'bathtub')[1],
+ dist=c('exponential','weibulld','weibulli','lognormal')[1],#,'bathtub')[1],
  parms
  ){
     n <- length(ebx)
-    logu <- log(runif(n))
+    u <- runif(n)
+    logu <- log(u)
 
     if (dist=='exponential'){
         time_T <- -logu / (ebx*parms$lambda)
     } else if (dist=='weibulld' | dist=='weibulli'){
         time_T <- parms$beta * (-logu / ebx)^(1/parms$alp)
-    } 
+    }  else if (dist=='lognormal'){
+        time_T <- exp(parms[,2]*qnorm(1-u/ebx)+parms[,1])
+    }
+    return (time_T)
 }
+
+
