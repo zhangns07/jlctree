@@ -494,7 +494,7 @@ eval_tree_pred<- function
                 Strue <- exp(-(timessub/parms$beta)^(parms$alp) * tmpebx)
             } else if (dist=='lognormal'){
                 tmpparms <- parms[tmpg,]
-                Strue <- exp(tmpebx)*(1-pnorm((log(timessub)-tmpparms[1])/tmpparms[2]))
+                Strue <- (1-pnorm((log(timessub)-tmpparms[1])/tmpparms[2]))^tmpebx
             }
 
 
@@ -569,7 +569,7 @@ eval_lcmm_pred<- function
             Strue <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
         } else if (dist=='lognormal'){
             tmpparms <- parms[tmpg,]
-            Strue <- exp(tmpebx)*(1-pnorm((log(times)-tmpparms[1])/tmpparms[2]))
+            Strue <- (1-pnorm((log(times)-tmpparms[1])/tmpparms[2]))^tmpebx
         }
 
         scores <- (Shat - Strue)^2
