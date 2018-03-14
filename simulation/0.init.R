@@ -642,13 +642,16 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
         }
 
     } else if (struct == 'linear'){
-        if (member == 'partition'){# roughly ensure sample number per group
-            W <- c(0.3, -0.5, 0.7)
-            val <- W[1] + W[2]*X1 + W[3]*X2
-            thres <- c(0.05, 0.55,1.25, Inf)
-            g <- apply(array(val),1,function(x){which(x<thres)[1]})
+        W <- matrix(c(0.8,-0.6,0.9,0.5,-0.8,0.6,0.5,0.9),byrow=TRUE,ncol=2) # random sample from sphere
+        if (member == 'partition'){
+            g <- apply(cbind(X1,X2),1,function(x){
+                           weights <- W %*% (x-2)
+                           which.max(weights)})
+#            W <- c(0.3, -0.5, 0.7)
+#            val <- W[1] + W[2]*X1 + W[3]*X2
+#            thres <- c(0.05, 0.55,1.25, Inf)
+#            g <- apply(array(val),1,function(x){which(x<thres)[1]})
         } else if (member == 'multinomial'){
-            W <- matrix(c(0.8,-0.6,0.9,0.5,-0.8,0.6,0.5,0.9),byrow=TRUE,ncol=2) # random sample from sphere
             g <- apply(cbind(X1,X2),1,function(x){
                            weights <- exp(W %*% (x-2))
                            weights <- weights/sum(weights)
