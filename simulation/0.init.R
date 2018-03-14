@@ -614,6 +614,7 @@ get_parms <- function(dist){
     return (list(parms=parms, slopes=slopes, lam_D=lam_D))
 }
 
+
 get_latent_class <- function(X1,X2,struct,member,seed=0){
     if (struct == 'tree'){
         if (member == 'partition'){
@@ -658,6 +659,26 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
                            cumweights <- cumsum(weights)
                            which(runif(1)  < cumweights)[1] })
         }
-    } 
+    } else if (struct == 'nonlinear'){
+        # use (X1-3)^2, (X1-3), (X2-3)^2, (X2-3) , (X1-3)*(X2-3)
+        W <- matrix(c(0.47,-0.27,-0.54,0.19,-0.61,
+                      0.01,0.71,-0.23,0.5,-0.45,
+                      0.41,0.21,0.2,-0.36,-0.79,
+                      0.35,0.45,-0.26,-0.53,-0.58),ncol=5,byrow=TRUE)
+
+        if (member == 'partition'){
+            g <- apply(cbind(X1,X2),1,function(x){
+                           y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
+                           weights <- W %*% y
+                           which.max(weights)})
+        } else if (member == 'multinomial'){
+            g <- apply(cbind(X1,X2),1,function(x){
+                           y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
+                           weights <- exp(W %*% y)
+                           weights <- weights/sum(weights)
+                           cumweights <- cumsum(weights)
+                           which(runif(1)  < cumweights)[1] })
+        }
+    }
     return (g)
 }

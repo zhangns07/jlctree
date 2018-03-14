@@ -76,9 +76,12 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
 
     # X1 - X5
-    if(FLAGS$struct=='linear'){
+    if(FLAGS$struct == 'linear'){
         X1 <- sample(c(1:3),2*Nsub,replace=TRUE)
         X2 <- sample(c(1:3),2*Nsub,replace=TRUE)
+    } else if (FLAGS$struct == 'nonlinear'){
+        X1 <- sample(c(1:5),2*Nsub,replace=TRUE)
+        X2 <- sample(c(1:5),2*Nsub,replace=TRUE)
     } else {
         X1 <- as.numeric(runif(2*Nsub)>0.5)
         X2 <- as.numeric(runif(2*Nsub)>0.5)
