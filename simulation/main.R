@@ -26,7 +26,9 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                                 help="algorithm: jlctree or jlcmm"),
                     make_option(c("-s", "--stop_thre"), type="numeric", default=NULL, help=""),
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
-                    make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"))
+                    make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
+                    make_option(c("-x", "--continuous"), type="logical", default=FALSE, help="Whether the predictors X1, X2 are continuous")
+                    )
 
 
 opt_parser <- OptionParser(option_list=option_list);
@@ -76,15 +78,24 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
 
     # X1 - X5
-    if(FLAGS$struct == 'linear'){
-        X1 <- sample(c(1:3),2*Nsub,replace=TRUE)
-        X2 <- sample(c(1:3),2*Nsub,replace=TRUE)
-    } else if (FLAGS$struct == 'nonlinear'){
-        X1 <- sample(c(1:5),2*Nsub,replace=TRUE)
-        X2 <- sample(c(1:5),2*Nsub,replace=TRUE)
+    if (FLAGS$continuous){
+        if(FLAGS$struct == 'linear'){
+            X1 <- round(runif(2*Nsub, min=1,max=3),1)
+            X2 <- round(runif(2*Nsub, min=1,max=3),1)
+        } else {
+            X1 <- round(runif(2*Nsub),1)
+            X2 <- round(runif(2*Nsub),1)
+        }
     } else {
-        X1 <- as.numeric(runif(2*Nsub)>0.5)
-        X2 <- as.numeric(runif(2*Nsub)>0.5)
+        if(FLAGS$struct == 'linear'){
+            X1 <- sample(c(1:3),2*Nsub,replace=TRUE)
+            X2 <- sample(c(1:3),2*Nsub,replace=TRUE)
+        } else if (FLAGS$struct == 'nonlinear'){
+            stop("Nonlinear must have continuous X1 and X2.")
+        } else {
+            X1 <- as.numeric(runif(2*Nsub)>0.5)
+            X2 <- as.numeric(runif(2*Nsub)>0.5)
+        }
     }
     X3 <- as.numeric(runif(2*Nsub)>0.5)
     X4 <- round(runif(2*Nsub),1)
@@ -195,7 +206,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
         mod <- get(paste0('m',best_ng))
         runtime <- round(difftime(tok,tik,units='secs'),4)
         RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6], 
-                            eval_lcmm_pred(data,dist,slopes,parms,mod,g=pseudo_g))
+                            eval_lcmm_pred(data,dist,slopes,parms,mod,g=pseudo_g,inter=FLAGS$inter))
         RET_iter <- RET_iter+1
     } else if (FLAGS$alg == 'jlctree'){
 
@@ -258,4 +269,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     filename <- paste0(FLAGS$outdir,'/simret_main/',RETbasefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
+
+
+
 

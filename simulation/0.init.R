@@ -528,7 +528,7 @@ eval_tree_pred<- function
 }
 
 eval_lcmm_pred<- function
-(data, dist, slopes, parms, mod,g=NULL){
+(data, dist, slopes, parms, mod,g=NULL,inter=TRUE){
     Nsub_pseudo<- nrow(data)
     if(is.null(g)){
         g <- 2*(data$X1)+data$X2+1
@@ -536,14 +536,25 @@ eval_lcmm_pred<- function
     true_parms <- slopes[g,]
     ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
 
-
     #  coeff
     nclasses <- ncol(mod$pprob)-2
     coefs <- mod$best
     coefstart <- max(which(grepl('Weibull',names(coefs))))+1
     pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses,ncol=3)
 
-    predclass <- (mod$pprob$class)[data$ID]
+    # predclass
+    #predclass <- (mod$pprob$class)[data$ID]
+    coefend <- min(which(grepl('Weibull',names(coefs))))-1
+    coefs_multilogit <- matrix(coefs[1:coefend],nrow=nclasses-1)
+    tmpX <- cbind(1,data[,c('X1','X2','X3','X4','X5')])
+    if(inter){
+        tmpX <- cbind(tmpX,data[,'X1']*data[,'X2'])
+    }
+
+    tmp1 <- as.matrix(tmpX) %*% t(coefs_multilogit)
+    predclass <- apply(tmp1, 1,function(x){ which.max(exp(c(x,0)))})
+
+
     pred_parms <- pred_slopes[predclass,]
     MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
 
@@ -615,12 +626,16 @@ get_parms <- function(dist){
 }
 
 
+
+
 get_latent_class <- function(X1,X2,struct,member,seed=0){
     if (struct == 'tree'){
+        W <- matrix(c( -1,-1, -1,1,1,-1,1,1),ncol=2,byrow=TRUE)
         if (member == 'partition'){
-            g <- 2*(X1)+X2+1
+            g <- apply(cbind(X1,X2),1,function(x){
+                           weights <- W %*% (x-0.5)
+                           which.max(weights)})
         } else if (member == 'multinomial'){
-            W <- matrix(c( -1,-1, -1,1,1,-1,1,1),ncol=2,byrow=TRUE)
             g <- apply(cbind(X1,X2),1,function(x){
                            weights <- exp(2*W %*% (x-0.5))
                            weights <- weights/sum(weights)
@@ -648,10 +663,6 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
             g <- apply(cbind(X1,X2),1,function(x){
                            weights <- W %*% (x-2)
                            which.max(weights)})
-#            W <- c(0.3, -0.5, 0.7)
-#            val <- W[1] + W[2]*X1 + W[3]*X2
-#            thres <- c(0.05, 0.55,1.25, Inf)
-#            g <- apply(array(val),1,function(x){which(x<thres)[1]})
         } else if (member == 'multinomial'){
             g <- apply(cbind(X1,X2),1,function(x){
                            weights <- exp(W %*% (x-2))
@@ -659,26 +670,43 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
                            cumweights <- cumsum(weights)
                            which(runif(1)  < cumweights)[1] })
         }
-    } else if (struct == 'nonlinear'){
-        # use (X1-3)^2, (X1-3), (X2-3)^2, (X2-3) , (X1-3)*(X2-3)
-        W <- matrix(c(0.47,-0.27,-0.54,0.19,-0.61,
-                      0.01,0.71,-0.23,0.5,-0.45,
-                      0.41,0.21,0.2,-0.36,-0.79,
-                      0.35,0.45,-0.26,-0.53,-0.58),ncol=5,byrow=TRUE)
-
-        if (member == 'partition'){
-            g <- apply(cbind(X1,X2),1,function(x){
-                           y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
-                           weights <- W %*% y
-                           which.max(weights)})
-        } else if (member == 'multinomial'){
-            g <- apply(cbind(X1,X2),1,function(x){
-                           y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
-                           weights <- exp(W %*% y)
-                           weights <- weights/sum(weights)
-                           cumweights <- cumsum(weights)
-                           which(runif(1)  < cumweights)[1] })
+    } else if (struct=='nonlinear'){
+        f1 <-  X1^2+X2^2 < 0.75^2
+        f2 <- (X1-0)^2+(X2-1)^2 < 0.75^2
+        g <- ifelse(f1, ifelse(f2, 4,1),ifelse(f2, 2,3))
+        if (member == 'multinomial'){
+            g_multi <- rep(0, length(g))
+            for (i in seq_along(X1)){
+                gi <- g[i]
+                weights <- rep(0.1,4); weights[gi] <- 0.7
+                cumweights <- cumsum(weights)
+                g_multi[i] <- which(runif(1)  < cumweights)[1]
+            }
+            g <- g_multi
         }
     }
+
+   # else if (struct == 'nonlinear'){
+
+   #     # use (X1-3)^2, (X1-3), (X2-3)^2, (X2-3) , (X1-3)*(X2-3)
+   #     W <- matrix(c(0.47,-0.27,-0.54,0.19,-0.61,
+   #                   0.01,0.71,-0.23,0.5,-0.45,
+   #                   0.41,0.21,0.2,-0.36,-0.79,
+   #                   0.35,0.45,-0.26,-0.53,-0.58),ncol=5,byrow=TRUE)
+
+   #     if (member == 'partition'){
+   #         g <- apply(cbind(X1,X2),1,function(x){
+   #                        y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
+   #                        weights <- W %*% y
+   #                        which.max(weights)})
+   #     } else if (member == 'multinomial'){
+   #         g <- apply(cbind(X1,X2),1,function(x){
+   #                        y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
+   #                        weights <- exp(W %*% y)
+   #                        weights <- weights/sum(weights)
+   #                        cumweights <- cumsum(weights)
+   #                        which(runif(1)  < cumweights)[1] })
+   #     }
+   # }
     return (g)
 }
