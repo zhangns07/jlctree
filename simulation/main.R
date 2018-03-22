@@ -1,4 +1,5 @@
 # The main model.
+# No evaluation.
 # Options:
 # - data generating: Nsub, censor, dist
 # - bookkeeping: outdir, minsim, maxsim
@@ -6,6 +7,7 @@
 # - latent class membership: membership=c('partition','multinomial')
 # - alg=c('jlctree','jclmm')
 # - jlctree specific: stop_thre, test
+# - continuous: whether X1 and X2 are continuous.
 library(optparse)
 library(data.table)
 library(plyr)
@@ -205,14 +207,14 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
         best_ng <- which.min(BICs)
         mod <- get(paste0('m',best_ng))
         runtime <- round(difftime(tok,tik,units='secs'),4)
-        RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6], 
-                            eval_lcmm_pred(data,dist,slopes,parms,mod,g=pseudo_g,inter=FLAGS$inter))
+        RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6], c(0,0,0,0))
+                            #eval_lcmm_pred(data,dist,slopes,parms,mod,g=pseudo_g,inter=FLAGS$inter))
         RET_iter <- RET_iter+1
     } else if (FLAGS$alg == 'jlctree'){
 
         if (FLAGS$stop_thre==-1){
-            RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, nnode=1,
-                                eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
+            RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, nnode=1,c(0,0,0,0))
+                                #eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
             RET_iter <- RET_iter+1
         } else {
             survs <- survs_v3
@@ -238,8 +240,8 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
 
             nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
             nnode <- sum(grepl('leaf',cond_ind_tree$frame$var))
-            RET[RET_iter,] <- c(sim,k=-Inf, runtime, nsplit, nnode,
-                                eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
+            RET[RET_iter,] <- c(sim,k=-Inf, runtime, nsplit, nnode,c(0,0,0,0))
+                                #eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
             RET_iter <- RET_iter+1
 
             for (kse in c(0:3)){
@@ -253,8 +255,8 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                     RET[RET_iter,] <- RET[RET_iter-1,]
                     RET[RET_iter,2] <- kse
                 } else {
-                    RET[RET_iter,] <- c(sim,k=kse, runtime, nsplit_prune, nnode_prune,
-                                        eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where,g=pseudo_g))
+                    RET[RET_iter,] <- c(sim,k=kse, runtime, nsplit_prune, nnode_prune,c(0,0,0,0))
+                                        #eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where,g=pseudo_g))
                 }
                 RET_iter <- RET_iter+1
 

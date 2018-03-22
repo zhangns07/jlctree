@@ -9,8 +9,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                     make_option(c("-c", "--censor"), type="numeric", default=0, help=""),
                     make_option(c("-d", "--dist"), type="character", default='exponential', help=""),
                     make_option(c("-o", "--outdir"), type="character", default='.', help="Output directory."),
-                    make_option(c("-l", "--minsim"), type="numeric", default=1, help="min sim"),
-                    make_option(c("-u", "--maxsim"), type="numeric", default=200, help="max sim"),
+#                    make_option(c("-l", "--minsim"), type="numeric", default=1, help="min sim"),
+#                    make_option(c("-u", "--maxsim"), type="numeric", default=200, help="max sim"),
                     make_option(c("-a", "--struct"), type="character", default='tree',
                                 help="latent class generating structure, tree (4 classes), XOR (2 classes), linear, or nonlinear."),
                     make_option(c("-b", "--member"), type="character", default='partition',
@@ -43,13 +43,18 @@ if (FLAGS$alg == 'jlcmm'){
 
 PARMS <- get_parms(FLAGS$dist)
 parms <- PARMS$parms; 
-Nsim <- FLAGS$maxsim-FLAGS$minsim+1
 
 opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; 
 RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
+Rbasefilename <-RETbasefilename
 
-opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL
-Rbasefilename <- paste0(paste0(names(opt3),"_",opt3),collapse="_")
+#opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL
+#Rbasefilename <- paste0(paste0(names(opt3),"_",opt3),collapse="_")
+
+filename <- paste0(FLAGS$outdir,'/simret_main_clean/',RETbasefilename,'.csv')
+INFO <- read.table(filename, sep=',')
+minsim <- min(INFO$sim); maxsim=max(INFO$sim)
+Nsim <- maxsim-minsim+1
 
 if (FLAGS$alg == 'jlcmm'){
     RET <- matrix(0,ncol=17,nrow=Nsim)
@@ -65,10 +70,7 @@ if (FLAGS$alg == 'jlcmm'){
 }
 RET_iter <- 1
 
-filename <- paste0(FLAGS$outdir,'/simret_main/',RETbasefilename,'.csv')
-INFO <- read.table(filename, sep=',')
-
-for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
+for (sim in c(minsim:maxsim)){
     DATA <- gen_data(FLAGS, PARMS,seed=sim)
     data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
