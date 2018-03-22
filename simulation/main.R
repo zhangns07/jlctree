@@ -80,11 +80,11 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     # X1 - X5
     if (FLAGS$continuous){
         if(FLAGS$struct == 'linear'){
-            X1 <- round(runif(2*Nsub, min=1,max=3),1)
-            X2 <- round(runif(2*Nsub, min=1,max=3),1)
+            X1 <- round(runif(2*Nsub, min=1,max=3),2)
+            X2 <- round(runif(2*Nsub, min=1,max=3),2)
         } else {
-            X1 <- round(runif(2*Nsub),1)
-            X2 <- round(runif(2*Nsub),1)
+            X1 <- round(runif(2*Nsub),2)
+            X2 <- round(runif(2*Nsub),2)
         }
     } else {
         if(FLAGS$struct == 'linear'){
