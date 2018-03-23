@@ -917,7 +917,7 @@ eval_tree_pred_inout <- function
 
     if(length(unique(idx))==1){
 #        ymod <- lm(y ~ idx, data=data)
-        ymod <- lm(y ~ X1+X2+X3+X4+X5, data=data)
+        ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|ID), data=data)
     } else {
 #        ymod <- lmer(y ~ idx + (1|ID),data=data)
         ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|idx) + (1|ID),data=data)
@@ -947,12 +947,21 @@ get_lcmm_ISE <- function(mod, data, g, predclass, dist, slopes, parms){
     coefstart <- max(which(grepl('Weibull',names(coefs))))+1
     pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses,ncol=3)
 
+    if (length(dim(predclass))==0){ avg <- FALSE} else {avg <- TRUE}
+
     for (x in c(1:nrow(data))){
-        Shat <- matrix(0,ncol=nclasses,nrow=ntimes)
+	if (!avg){
+		tmpc <- predclass[x]
+		tmpebx <- exp(sum(pred_slopes[tmpc,] * data[x,c('X3','X4','X5')]))
+		Shat <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
+	} else {
+		Shat_raw <- matrix(0,ncol=nclasses,nrow=ntimes)
         for (tmpc in c(1:nclasses)){
             tmpebx <- exp(sum(pred_slopes[tmpc,] * data[x,c('X3','X4','X5')]))
-            Shat[,tmpc] <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
+            Shat_raw[,tmpc] <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
         }
+	Shat<- c(Shat_raw %*% predclass[x,])
+	}
 
         tmpg <- g[x]
         tmpebx <- exp(sum(slopes[tmpg,] * data[x,c('X3','X4','X5')]))
@@ -965,13 +974,7 @@ get_lcmm_ISE <- function(mod, data, g, predclass, dist, slopes, parms){
             Strue <- (1-pnorm((log(times)-tmpparms[1])/tmpparms[2]))^tmpebx
         }
 
-        if (length(dim(predclass))==0){ # in sample
-            Shat_final <- Shat[,predclass[x]]
-        } else if (length(dim(predclass))==2){ # out sample
-            Shat_final <- c(Shat %*% predclass[x,])
-        }
-
-        scores <- (Shat_final - Strue)^2
+        scores <- (Shat - Strue)^2
         SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(times)) / diff(range(times))
         ISE <- ISE + SE
     }
