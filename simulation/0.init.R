@@ -895,9 +895,9 @@ eval_tree_pred_inout <- function
             } else break 
         }
         if (class(mod)=="try-error") { mod <- coxph(Surv(time_L,time_Y,delta) ~ 1, sdata); KM <- TRUE }
-        sdata <- data[sid,]; 
+        orgsdata <- data[sid,]; #if sdata has been reordered, then survfit(mod) will have trouble.
 
-        ISE <- ISE + get_tree_ISE(mod, sdata, sg, evaltimes, dist, slopes, parms, KM)
+        ISE <- ISE + get_tree_ISE(mod, orgsdata, sg, evaltimes, dist, slopes, parms, KM)
 	if(nrow(sdata_test)>0){
 		ISE_test <- ISE_test + get_tree_ISE(mod, sdata_test, sg_test, evaltimes_test, dist, slopes,parms, KM)
 	}
