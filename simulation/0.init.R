@@ -898,7 +898,9 @@ eval_tree_pred_inout <- function
         sdata <- data[sid,]; 
 
         ISE <- ISE + get_tree_ISE(mod, sdata, sg, evaltimes, dist, slopes, parms, KM)
-        ISE_test <- ISE_test + get_tree_ISE(mod, sdata_test, sg_test, evaltimes_test, dist, slopes,parms, KM)
+	if(nrow(sdata_test)>0){
+		ISE_test <- ISE_test + get_tree_ISE(mod, sdata_test, sg_test, evaltimes_test, dist, slopes,parms, KM)
+	}
 
         if (!KM){
             pred_parms[sid,] <- rep(mod$coefficients,each=nrow(sdata))
