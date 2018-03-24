@@ -56,6 +56,8 @@ INFO <- read.table(filename, sep=',', header=TRUE)
 minsim <- min(subset(INFO, sim>0)$sim); maxsim=max(INFO$sim)
 Nsim <- maxsim-minsim+1
 
+if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
+
 if (FLAGS$alg == 'jlcmm'){
     RET <- matrix(0,ncol=17,nrow=Nsim)
     colnames(RET) <- c('sim','runtime','bestng','B2','B3','B4','B5','B6',
