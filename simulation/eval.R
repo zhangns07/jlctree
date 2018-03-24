@@ -107,7 +107,7 @@ for (sim in c(minsim:maxsim)){
         } else {
             currINFO <- unlist(INFO[RET_iter, c(1:5)])
             Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_sim_',sim,'.RData')
-	    if(!file.exits(Rfilename)){
+	    if(!file.exists(Rfilename)){
 		EVALS <- rep(0,7)
 		RET[RET_iter,] <- c(currINFO, EVALS)
 		RET_iter <- RET_iter+1
@@ -125,6 +125,7 @@ for (sim in c(minsim:maxsim)){
 		RET[RET_iter,] <- c(currINFO, EVALS)
 		RET_iter <- RET_iter+1
 
+		nsplit <- currINFO['nsplit']
 		cventry <- which.min(cptable[, "xerror"])
 		xerrorcv <- cptable[cventry, "xerror"]
 
