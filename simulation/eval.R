@@ -128,6 +128,7 @@ for (sim in c(minsim:maxsim)){
 		RET_iter <- RET_iter+1
 
 		nsplit <- currINFO['nsplit']
+		if(exists('cptable')){
 		cventry <- which.min(cptable[, "xerror"])
 		xerrorcv <- cptable[cventry, "xerror"]
 
@@ -150,6 +151,7 @@ for (sim in c(minsim:maxsim)){
 			}
 			RET_iter <- RET_iter+1
 		}
+		} else{ for (kse in c(0:3)){ RET_iter <- RET_iter+1} } 
 	    }
 	}
     }
