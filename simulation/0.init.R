@@ -627,7 +627,6 @@ get_parms <- function(dist){
 
 
 
-
 get_latent_class <- function(X1,X2,struct,member,seed=0){
     if (struct == 'tree'){
         W <- matrix(c( -1,-1, -1,1,1,-1,1,1),ncol=2,byrow=TRUE)
@@ -670,10 +669,17 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
                            cumweights <- cumsum(weights)
                            which(runif(1)  < cumweights)[1] })
         }
-    } else if (struct=='nonlinear'){
-        f1 <-  X1^2+X2^2 < 0.75^2
-        f2 <- (X1-0)^2+(X2-1)^2 < 0.75^2
-        g <- ifelse(f1, ifelse(f2, 4,1),ifelse(f2, 2,3))
+    } else {
+        if (struct=='nonlinear'){
+            f1 <-  X1^2+X2^2 < 0.75^2
+            f2 <- (X1-0)^2+(X2-1)^2 < 0.75^2
+            g <- ifelse(f1, ifelse(f2, 4,1),ifelse(f2, 2,3))
+        } else if (struct == 'asym'){
+            g <- ifelse(X1>0.75, 1, ifelse(X2<0.33, 2, ifelse(X2<0.67,3,4)))
+        } else if (struct == 'quad'){
+            g <- ifelse(X1<0.25,1,ifelse(X1<0.5,4,ifelse(X1<0.75,2,3)))
+        }
+
         if (member == 'multinomial'){
             g_multi <- rep(0, length(g))
             for (i in seq_along(X1)){
@@ -685,29 +691,6 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
             g <- g_multi
         }
     }
-
-   # else if (struct == 'nonlinear'){
-
-   #     # use (X1-3)^2, (X1-3), (X2-3)^2, (X2-3) , (X1-3)*(X2-3)
-   #     W <- matrix(c(0.47,-0.27,-0.54,0.19,-0.61,
-   #                   0.01,0.71,-0.23,0.5,-0.45,
-   #                   0.41,0.21,0.2,-0.36,-0.79,
-   #                   0.35,0.45,-0.26,-0.53,-0.58),ncol=5,byrow=TRUE)
-
-   #     if (member == 'partition'){
-   #         g <- apply(cbind(X1,X2),1,function(x){
-   #                        y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
-   #                        weights <- W %*% y
-   #                        which.max(weights)})
-   #     } else if (member == 'multinomial'){
-   #         g <- apply(cbind(X1,X2),1,function(x){
-   #                        y <- c((x-3)^2,x-3, (x[1]-3)*(x[2]-3))
-   #                        weights <- exp(W %*% y)
-   #                        weights <- weights/sum(weights)
-   #                        cumweights <- cumsum(weights)
-   #                        which(runif(1)  < cumweights)[1] })
-   #     }
-   # }
     return (g)
 }
 
@@ -898,9 +881,9 @@ eval_tree_pred_inout <- function
         orgsdata <- data[sid,]; #if sdata has been reordered, then survfit(mod) will have trouble.
 
         ISE <- ISE + get_tree_ISE(mod, orgsdata, sg, evaltimes, dist, slopes, parms, KM)
-	if(nrow(sdata_test)>0){
-		ISE_test <- ISE_test + get_tree_ISE(mod, sdata_test, sg_test, evaltimes_test, dist, slopes,parms, KM)
-	}
+        if(nrow(sdata_test)>0){
+            ISE_test <- ISE_test + get_tree_ISE(mod, sdata_test, sg_test, evaltimes_test, dist, slopes,parms, KM)
+        }
 
         if (!KM){
             pred_parms[sid,] <- rep(mod$coefficients,each=nrow(sdata))
@@ -918,10 +901,10 @@ eval_tree_pred_inout <- function
     data_test$idx <- factor(idx_test); data_test$ID <- 0
 
     if(length(unique(idx))==1){
-#        ymod <- lm(y ~ idx, data=data)
+        #        ymod <- lm(y ~ idx, data=data)
         ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|ID), data=data)
     } else {
-#        ymod <- lmer(y ~ idx + (1|ID),data=data)
+        #        ymod <- lmer(y ~ idx + (1|ID),data=data)
         ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|idx) + (1|ID),data=data)
     }
     predy<- predict(ymod); predy_test <- predict(ymod,newdata=data_test, allow.new.levels=TRUE)
@@ -952,18 +935,18 @@ get_lcmm_ISE <- function(mod, data, g, predclass, dist, slopes, parms){
     if (length(dim(predclass))==0){ avg <- FALSE} else {avg <- TRUE}
 
     for (x in c(1:nrow(data))){
-	if (!avg){
-		tmpc <- predclass[x]
-		tmpebx <- exp(sum(pred_slopes[tmpc,] * data[x,c('X3','X4','X5')]))
-		Shat <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
-	} else {
-		Shat_raw <- matrix(0,ncol=nclasses,nrow=ntimes)
-        for (tmpc in c(1:nclasses)){
+        if (!avg){
+            tmpc <- predclass[x]
             tmpebx <- exp(sum(pred_slopes[tmpc,] * data[x,c('X3','X4','X5')]))
-            Shat_raw[,tmpc] <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
+            Shat <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
+        } else {
+            Shat_raw <- matrix(0,ncol=nclasses,nrow=ntimes)
+            for (tmpc in c(1:nclasses)){
+                tmpebx <- exp(sum(pred_slopes[tmpc,] * data[x,c('X3','X4','X5')]))
+                Shat_raw[,tmpc] <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpc)])
+            }
+            Shat<- c(Shat_raw %*% predclass[x,])
         }
-	Shat<- c(Shat_raw %*% predclass[x,])
-	}
 
         tmpg <- g[x]
         tmpebx <- exp(sum(slopes[tmpg,] * data[x,c('X3','X4','X5')]))

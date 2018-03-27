@@ -9,8 +9,6 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-c", "--censor"), type="numeric", default=0, help=""),
                     make_option(c("-d", "--dist"), type="character", default='exponential', help=""),
                     make_option(c("-o", "--outdir"), type="character", default='.', help="Output directory."),
-#                    make_option(c("-l", "--minsim"), type="numeric", default=1, help="min sim"),
-#                    make_option(c("-u", "--maxsim"), type="numeric", default=200, help="max sim"),
                     make_option(c("-a", "--struct"), type="character", default='tree',
                                 help="latent class generating structure, tree (4 classes), XOR (2 classes), linear, or nonlinear."),
                     make_option(c("-b", "--member"), type="character", default='partition',
@@ -48,9 +46,6 @@ opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL;
 RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
 Rbasefilename <-RETbasefilename
 
-#opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL
-#Rbasefilename <- paste0(paste0(names(opt3),"_",opt3),collapse="_")
-
 filename <- paste0(FLAGS$outdir,'/simret_main_clean/',RETbasefilename,'.csv')
 INFO <- read.table(filename, sep=',', header=TRUE)
 minsim <- min(subset(INFO, sim>0)$sim); maxsim=max(INFO$sim)
@@ -80,20 +75,20 @@ for (sim in c(minsim:maxsim)){
     data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
 
     if (FLAGS$alg == 'jlcmm'){
-	# need classmb since we use lcmm.predict in eval_lcmm_pred_inout
-	if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5}
+        # need classmb since we use lcmm.predict in eval_lcmm_pred_inout
+        if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5}
         currINFO <- unlist(INFO[RET_iter,1:8])
         best_ng <- currINFO['bestng']
 
         Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
-	if(!file.exists(Rfilename)){ 
-		EVALS <- rep(0, 9)
-	} else {
-		load(Rfilename)
-		mod <- get(paste0('m',best_ng))
-		EVALS <- eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes,
-				PARMS$parms, mod, pseudo_g, pseudo_g_test)
-	}
+        if(!file.exists(Rfilename)){ 
+            EVALS <- rep(0, 9)
+        } else {
+            load(Rfilename)
+            mod <- get(paste0('m',best_ng))
+            EVALS <- eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes,
+                                          PARMS$parms, mod, pseudo_g, pseudo_g_test)
+        }
         RET[RET_iter,] <- c(currINFO, EVALS)
         RET_iter <- RET_iter+1
 
@@ -109,51 +104,51 @@ for (sim in c(minsim:maxsim)){
         } else {
             currINFO <- unlist(INFO[RET_iter, c(1:5)])
             Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_sim_',sim,'.RData')
-	    if(!file.exists(Rfilename)){
-		EVALS <- rep(0,7)
-		RET[RET_iter,] <- c(currINFO, EVALS)
-		RET_iter <- RET_iter+1
-		for (kse in c(0:3)){ RET_iter <- RET_iter+1 }
-	    } else {
-		load(Rfilename)
-		survs <- survs_v3
-		survlist <- list(eval=surve, split=survs, init=survi)
+            if(!file.exists(Rfilename)){
+                EVALS <- rep(0,7)
+                RET[RET_iter,] <- c(currINFO, EVALS)
+                RET_iter <- RET_iter+1
+                for (kse in c(0:3)){ RET_iter <- RET_iter+1 }
+            } else {
+                load(Rfilename)
+                survs <- survs_v3
+                survlist <- list(eval=surve, split=survs, init=survi)
 
-		idx <- cond_ind_tree$where
-		idx_test <- predict_class(cond_ind_tree, data_test)
-		EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-				idx, idx_test, pseudo_g, pseudo_g_test)
-	    
-		RET[RET_iter,] <- c(currINFO, EVALS)
-		RET_iter <- RET_iter+1
+                idx <- cond_ind_tree$where
+                idx_test <- predict_class(cond_ind_tree, data_test)
+                EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                              idx, idx_test, pseudo_g, pseudo_g_test)
 
-		nsplit <- currINFO['nsplit']
-		if(exists('cptable')){
-		cventry <- which.min(cptable[, "xerror"])
-		xerrorcv <- cptable[cventry, "xerror"]
+                RET[RET_iter,] <- c(currINFO, EVALS)
+                RET_iter <- RET_iter+1
 
-		for (kse in c(0:3)){
-			sexerrorcv <- xerrorcv + kse*cptable[cventry, "xstd"] 
-			cpcvse <- cptable[which.max(cptable[, "xerror"] <= sexerrorcv), "CP"]
-			cond_ind_tree_prune <- prune(cond_ind_tree, cp=cpcvse)
-			nsplit_prune <- max(cond_ind_tree_prune$cptable[,'nsplit'])
-			nnode_prune  <- sum(grepl('leaf',cond_ind_tree_prune$frame$var))
+                nsplit <- currINFO['nsplit']
+                if(exists('cptable')){
+                    cventry <- which.min(cptable[, "xerror"])
+                    xerrorcv <- cptable[cventry, "xerror"]
 
-			if (nsplit_prune == nsplit){
-				RET[RET_iter,] <- RET[RET_iter-1,]
-				RET[RET_iter,2] <- kse
-			} else {
-				idx <- cond_ind_tree_prune$where
-				idx_test <- predict_class(cond_ind_tree_prune, data_test)
-				EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-						idx, idx_test, pseudo_g, pseudo_g_test)
-				RET[RET_iter,] <- c(sim,k=kse, currINFO['runtime'], nsplit_prune, nnode_prune, EVALS)
-			}
-			RET_iter <- RET_iter+1
-		}
-		} else{ for (kse in c(0:3)){ RET_iter <- RET_iter+1} } 
-	    }
-	}
+                    for (kse in c(0:3)){
+                        sexerrorcv <- xerrorcv + kse*cptable[cventry, "xstd"] 
+                        cpcvse <- cptable[which.max(cptable[, "xerror"] <= sexerrorcv), "CP"]
+                        cond_ind_tree_prune <- prune(cond_ind_tree, cp=cpcvse)
+                        nsplit_prune <- max(cond_ind_tree_prune$cptable[,'nsplit'])
+                        nnode_prune  <- sum(grepl('leaf',cond_ind_tree_prune$frame$var))
+
+                        if (nsplit_prune == nsplit){
+                            RET[RET_iter,] <- RET[RET_iter-1,]
+                            RET[RET_iter,2] <- kse
+                        } else {
+                            idx <- cond_ind_tree_prune$where
+                            idx_test <- predict_class(cond_ind_tree_prune, data_test)
+                            EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                          idx, idx_test, pseudo_g, pseudo_g_test)
+                            RET[RET_iter,] <- c(sim,k=kse, currINFO['runtime'], nsplit_prune, nnode_prune, EVALS)
+                        }
+                        RET_iter <- RET_iter+1
+                    }
+                } else{ for (kse in c(0:3)){ RET_iter <- RET_iter+1} } 
+            }
+        }
     }
     cat('sim: ',sim,'\n')
 
