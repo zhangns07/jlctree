@@ -784,6 +784,15 @@ gen_data <- function(FLAGS, PARMS, seed){
     y <- fixef[pseudo_g] + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
     data <- cbind(LTRC_data,y)
 
+    if(!is.null(FLAGS$extra)){
+        if( FLAGS$extra ){ # add extra unrelated predictors
+        X6 <- (round(runif(Nsub),2))[LTRC_data$ID]
+        X7 <- (round(runif(Nsub),2))[LTRC_data$ID]
+        X8 <- (as.numeric(runif(Nsub)>0.5))[LTRC_data$ID]
+        X9 <- (round(runif(Nsub),1))[LTRC_data$ID]
+        X10 <- (sample(c(1:5),Nsub,replace=TRUE))[LTRC_data$ID]
+        data <- cbind(data, X6,X7,X8,X9,X10)
+    }}
     return(list(data=data,pseudo_g=pseudo_g))
 }
 
@@ -798,10 +807,12 @@ predict_class <- function(obj, newdata){
         coefs <- obj$best
         coefend <- min(which(grepl('Weibull',names(coefs))))-1
         coefs_multilogit <- matrix(coefs[1:coefend],nrow=nclasses-1)
-        tmpX <- cbind(1,newdata[,c('X1','X2','X3','X4','X5')])
-        if (ncol(coefs_multilogit)==7){
+        tmpX <- cbind(1,newdata[,paste0('X',c(1:5))])
+        if ('X6' %in% colnames(newdata)){ tmpX <- cbind(tmpX,newdata[,paste0('X',c(6:10))]) }
+        if (ncol(coefs_multilogit) %in% c(7,12)){
             tmpX <- cbind(tmpX,newdata[,'X1']*newdata[,'X2'])
-        }
+        } 
+
 
         linearval <- as.matrix(tmpX) %*% t(coefs_multilogit)
         test_class <- t(apply(linearval, 1,function(x){ exps=exp(c(x,0)); exps/sum(exps)}))
@@ -978,7 +989,7 @@ eval_lcmm_pred_inout <- function
     nclasses <- ncol(mod$pprob)-2
     coefs <- mod$best
     coefstart <- max(which(grepl('Weibull',names(coefs))))+1
-    pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses,ncol=3)
+    pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses)
 
     # insample predclass
     predclass_in <- (mod$pprob$class)[data$ID]
