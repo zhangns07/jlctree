@@ -627,7 +627,17 @@ get_parms <- function(dist){
 
 
 
-get_latent_class <- function(X1,X2,struct,member,seed=0){
+get_latent_class <- function(X1,X2,struct,member,seed=0,majprob=NULL){
+
+    if(is.null(majprob)){
+        Wmul <- 1
+    } else {
+        Wlist <- switch(struct,
+                        tree=list('0.25' = 0, '0.5'=1, '0.85'=3.3, '0.99'=9), 
+                        linear=list('0.25' = 0, '0.5'=2, '0.85'=6.5, '0.99'=16))
+        Wmul <- Wlist[[as.character(majprob)]]
+    }
+
     if (struct == 'tree'){
         W <- matrix(c( -1,-1, -1,1,1,-1,1,1),ncol=2,byrow=TRUE)
         if (member == 'partition'){
@@ -635,6 +645,7 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
                            weights <- W %*% (x-0.5)
                            which.max(weights)})
         } else if (member == 'multinomial'){
+            W <- W*Wmul
             g <- apply(cbind(X1,X2),1,function(x){
                            weights <- exp(2*W %*% (x-0.5))
                            weights <- weights/sum(weights)
@@ -663,6 +674,7 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
                            weights <- W %*% (x-2)
                            which.max(weights)})
         } else if (member == 'multinomial'){
+            W <- W*Wmul
             g <- apply(cbind(X1,X2),1,function(x){
                            weights <- exp(W %*% (x-2))
                            weights <- weights/sum(weights)
@@ -680,11 +692,13 @@ get_latent_class <- function(X1,X2,struct,member,seed=0){
             g <- ifelse(X1<0.25,1,ifelse(X1<0.5,4,ifelse(X1<0.75,2,3)))
         }
 
+        if(is.null(majprob)){majprob <- 0.7}
         if (member == 'multinomial'){
             g_multi <- rep(0, length(g))
             for (i in seq_along(X1)){
                 gi <- g[i]
-                weights <- rep(0.1,4); weights[gi] <- 0.7
+                weights <- rep((1-majprob)/3,4); weights[gi] <- majprob
+                #weights <- rep(0.1,4); weights[gi] <- 0.7
                 cumweights <- cumsum(weights)
                 g_multi[i] <- which(runif(1)  < cumweights)[1]
             }
@@ -729,7 +743,7 @@ gen_data <- function(FLAGS, PARMS, seed){
     X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
     X <- cbind(X1,X2,X3,X4,X5)
 
-    g <- get_latent_class(X1,X2,FLAGS$struct, FLAGS$member, seed=seed)
+    g <- get_latent_class(X1,X2,FLAGS$struct, FLAGS$member, seed=seed, FLAGS$majprob)
     if(FLAGS$dist == 'lognormal'){ 
         ebx <- rep(1 , 2*Nsub)
         tmp_parms <- parms[g,]
