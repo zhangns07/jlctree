@@ -51,12 +51,14 @@ if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 if(is.null(FLAGS$extra)){FLAGS$extra <- FALSE}
 if(FLAGS$extra){ 
 	RDatadir <- 'simret_extra_RData/' 
-	evaldir <- 'simret_extra_eval/' 
-	cleandir<-'simret_extra_clean/' 
+	evaldir <- 'simret_extra_eval_prunetree/' 
+#	cleandir<-'simret_extra_clean/' 
+	cleandir<-'simret_extra_eval/' 
 } else { 
 	RDatadir <- 'simret_main_RData/' 
-	evaldir <- 'simret_main_eval/' 
-	cleandir<-'simret_main_clean/' 
+	evaldir <- 'simret_main_eval_prunetree/' 
+#	cleandir<-'simret_main_clean/' 
+	cleandir<-'simret_main_eval/' 
 }
 
 
@@ -126,42 +128,35 @@ for (sim in c(minsim:maxsim)){
                 for (kse in c(0:3)){ RET_iter <- RET_iter+1 }
             } else {
                 load(Rfilename)
-                survs <- survs_v3
-                survlist <- list(eval=surve, split=survs, init=survi)
+		if(currINFO['nsplit'] <=5){
+			RET[RET_iter,] <- unlist(INFO[RET_iter,])
+                	RET_iter <- RET_iter+1
+			for (kse in c(0:3)){ 
+				RET[RET_iter,] <- unlist(INFO[RET_iter,])
+				RET_iter <- RET_iter+1
+			}  
+		} else {
+			prunecp <- min(cond_ind_tree$cptable[,'CP'][cond_ind_tree$cptable[,'nsplit']<=5])
+			cond_ind_tree <- prune(cond_ind_tree, prunecp)
+			currINFO['nsplit'] <- max(cond_ind_tree$cptable[,'nsplit'])
+			currINFO['nnode'] <- sum(grepl('leaf',cond_ind_tree$frame$var))
 
-                idx <- cond_ind_tree$where
-                idx_test <- predict_class(cond_ind_tree, data_test)
-                EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                                              idx, idx_test, pseudo_g, pseudo_g_test)
+                	survs <- survs_v3
+                	survlist <- list(eval=surve, split=survs, init=survi)
 
-                RET[RET_iter,] <- c(currINFO, EVALS)
-                RET_iter <- RET_iter+1
+                	idx <- cond_ind_tree$where
+                	idx_test <- predict_class(cond_ind_tree, data_test)
+                	EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                	                              idx, idx_test, pseudo_g, pseudo_g_test)
 
-                nsplit <- currINFO['nsplit']
-                if(exists('cptable')){
-                    cventry <- which.min(cptable[, "xerror"])
-                    xerrorcv <- cptable[cventry, "xerror"]
-
-                    for (kse in c(0:3)){
-                        sexerrorcv <- xerrorcv + kse*cptable[cventry, "xstd"] 
-                        cpcvse <- cptable[which.max(cptable[, "xerror"] <= sexerrorcv), "CP"]
-                        cond_ind_tree_prune <- prune(cond_ind_tree, cp=cpcvse)
-                        nsplit_prune <- max(cond_ind_tree_prune$cptable[,'nsplit'])
-                        nnode_prune  <- sum(grepl('leaf',cond_ind_tree_prune$frame$var))
-
-                        if (nsplit_prune == nsplit){
-                            RET[RET_iter,] <- RET[RET_iter-1,]
-                            RET[RET_iter,2] <- kse
-                        } else {
-                            idx <- cond_ind_tree_prune$where
-                            idx_test <- predict_class(cond_ind_tree_prune, data_test)
-                            EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                                                          idx, idx_test, pseudo_g, pseudo_g_test)
-                            RET[RET_iter,] <- c(sim,k=kse, currINFO['runtime'], nsplit_prune, nnode_prune, EVALS)
-                        }
-                        RET_iter <- RET_iter+1
-                    }
-                } else{ for (kse in c(0:3)){ RET_iter <- RET_iter+1} } 
+                	RET[RET_iter,] <- c(currINFO, EVALS)
+                	RET_iter <- RET_iter+1
+			for (kse in c(0:3)){ 
+				RET[RET_iter,] <- c(currINFO, EVALS)
+				RET[RET_iter,2] <- kse
+				RET_iter <- RET_iter+1
+			}  
+		}
             }
         }
     }
