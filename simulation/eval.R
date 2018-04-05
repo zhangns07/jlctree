@@ -18,7 +18,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-s", "--stop_thre"), type="numeric", default=NULL, help=""),
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
-                    make_option(c("-x", "--continuous"), type="logical", default=NULL, help="Whether the predictors X1, X2 are continuous")
+                    make_option(c("-x", "--continuous"), type="logical", default=NULL, help="Whether the predictors X1, X2 are continuous"),
+                    make_option(c("-e", "--extra"), type="logical", default=NULL, help="Whether to use extra uncorelated predictors ")
                     )
 
 
@@ -46,12 +47,24 @@ opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL;
 RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
 Rbasefilename <-RETbasefilename
 
-filename <- paste0(FLAGS$outdir,'/simret_main_clean/',RETbasefilename,'.csv')
+if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
+if(is.null(FLAGS$extra)){FLAGS$extra <- FALSE}
+if(FLAGS$extra){ 
+	RDatadir <- 'simret_extra_RData/' 
+	evaldir <- 'simret_extra_eval/' 
+	cleandir<-'simret_extra_clean/' 
+} else { 
+	RDatadir <- 'simret_main_RData/' 
+	evaldir <- 'simret_main_eval/' 
+	cleandir<-'simret_main_clean/' 
+}
+
+
+
+filename <- paste0(FLAGS$outdir,'/',cleandir,RETbasefilename,'.csv')
 INFO <- read.table(filename, sep=',', header=TRUE)
 minsim <- min(subset(INFO, sim>0)$sim); maxsim=max(INFO$sim)
 Nsim <- maxsim-minsim+1
-
-if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 
 if (FLAGS$alg == 'jlcmm'){
     RET <- matrix(0,ncol=17,nrow=Nsim)
@@ -77,10 +90,12 @@ for (sim in c(minsim:maxsim)){
     if (FLAGS$alg == 'jlcmm'){
         # need classmb since we use lcmm.predict in eval_lcmm_pred_inout
         if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5}
+	if(FLAGS$extra){ if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5+X6+X7+X8+X9+X10 
+		} else { classmb <- ~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10 } } 
         currINFO <- unlist(INFO[RET_iter,1:8])
         best_ng <- currINFO['bestng']
 
-        Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
+        Rfilename <- paste0(FLAGS$outdir,'/',RDatadir, Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
         if(!file.exists(Rfilename)){ 
             EVALS <- rep(0, 9)
         } else {
@@ -103,7 +118,7 @@ for (sim in c(minsim:maxsim)){
 
         } else {
             currINFO <- unlist(INFO[RET_iter, c(1:5)])
-            Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_sim_',sim,'.RData')
+            Rfilename <- paste0(FLAGS$outdir,'/',RDatadir, Rbasefilename,'_sim_',sim,'.RData')
             if(!file.exists(Rfilename)){
                 EVALS <- rep(0,7)
                 RET[RET_iter,] <- c(currINFO, EVALS)
@@ -152,7 +167,7 @@ for (sim in c(minsim:maxsim)){
     }
     cat('sim: ',sim,'\n')
 
-    filename <- paste0(FLAGS$outdir,'/simret_main_eval/',RETbasefilename,'.csv')
+    filename <- paste0(FLAGS$outdir,'/',evaldir, RETbasefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
 
