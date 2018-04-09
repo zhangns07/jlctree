@@ -633,8 +633,8 @@ get_latent_class <- function(X1,X2,struct,member,seed=0,majprob=NULL){
         Wmul <- 1
     } else {
         Wlist <- switch(struct,
-                        tree=list('0.25' = 0, '0.5'=1, '0.85'=4.5, '0.99'=50), 
-                        linear=list('0.25' = 0, '0.5'=1.5, '0.85'=9, '0.99'=150))
+                        tree=list('0.25' = 0, '0.5'=1, '0.7'=2, '0.85'=4.5, '0.99'=50), 
+                        linear=list('0.25' = 0, '0.5'=1.5, '0.7'=3.8, '0.85'=9, '0.99'=150))
         Wmul <- Wlist[[as.character(majprob)]]
     }
 
