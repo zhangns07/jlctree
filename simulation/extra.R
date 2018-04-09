@@ -22,7 +22,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
                     make_option(c("-x", "--continuous"), type="logical", default=FALSE, help="Whether the predictors X1, X2 are continuous"),
-                    make_option(c("-e", "--extra"), type="logical", default=TRUE, help="Whether to use extra uncorelated predictors ")
+                    make_option(c("-e", "--extra"), type="logical", default=TRUE, help="Whether to use extra uncorelated predictors "),
+                    make_option(c("-m", "--majprob"), type="numeric", default=0.85, help="Maximum probablity for majority family")
                     )
 
 
