@@ -121,4 +121,27 @@ gen_model3_survival <- function
     return (time_T)
 }
 
+gen_model4_survival <- function
+(ebx, # should be a matrix of two columns
+ dist=c('exponential','weibulld','weibulli'),#'lognormal')[1],#,'bathtub')[1],
+ parms,
+ t1 # change points
+ ){
+    n <- nrow(ebx)
+    u <- runif(n)
+    logu <- log(u)
+
+    if (dist=='exponential'){
+        St1 <- exp(-t1*ebx[,1]*parms$lambda)
+        time_T <- ifelse(u > St1, 
+                         -logu / (ebx[,1]*parms$lambda),
+                         (-logu +log(St1))/(parms$lambda*ebx[,2])+t1)
+    } else if (dist=='weibulld' | dist=='weibulli'){
+        St1 <- exp(-(t1/parms$beta)^(parms$alp)*ebx[,1])
+        time_T <- ifelse(u > St1,
+                         parms$beta * (-logu / ebx[,1])^(1/parms$alp),
+                         ((-logu+log(St1))*(parms$beta^parms$alp)/ebx[,2]+t1^(parms$alp))^(1/parms$alp))
+    }
+    return (time_T)
+}
 
