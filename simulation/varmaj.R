@@ -72,6 +72,9 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
 
     if (FLAGS$alg == 'jlcmm'){
+
+	Rfilename <- paste0(FLAGS$outdir,'/simret_varmaj_RData/',Rbasefilename,'_ng_',6,'_sim_',sim,'.RData')
+	if(file.exists(Rfilename)){ next }
         m1 <- Jointlcmm(fixed=y~X1+X2+X3+X4+X5,
                         subject='ID',
                         survival = Surv(time_L,time_Y,delta)~X3+X4+X5,
@@ -111,8 +114,8 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
             }
 
             assign(paste0('m',ng), mod)
-            Rfilename <- paste0(FLAGS$outdir,'/simret_varmaj_RData/',Rbasefilename,'_ng_',ng,'_sim_',sim,'.RData')
-            save(list=paste0('m',ng), file=Rfilename)
+            #Rfilename <- paste0(FLAGS$outdir,'/simret_varmaj_RData/',Rbasefilename,'_ng_',ng,'_sim_',sim,'.RData')
+            #save(list=paste0('m',ng), file=Rfilename)
         }
         tok <- Sys.time()
 
@@ -121,6 +124,8 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
         runtime <- round(difftime(tok,tik,units='secs'),4)
         RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6])
         #eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes, PARMS$parms, mod, pseudo_g, pseudo_g_test)
+        Rfilename <- paste0(FLAGS$outdir,'/simret_varmaj_RData/',Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
+        save(list=paste0('m',best_ng), file=Rfilename)
 
         RET_iter <- RET_iter+1
     } else if (FLAGS$alg == 'jlctree'){
