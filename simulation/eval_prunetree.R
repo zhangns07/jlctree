@@ -19,7 +19,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
                     make_option(c("-x", "--continuous"), type="logical", default=NULL, help="Whether the predictors X1, X2 are continuous"),
-                    make_option(c("-e", "--extra"), type="logical", default=NULL, help="Whether to use extra uncorelated predictors ")
+                    make_option(c("-e", "--extra"), type="logical", default=NULL, help="Whether to use extra uncorelated predictors "),
+		    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family")
                     )
 
 
@@ -49,11 +50,17 @@ Rbasefilename <-RETbasefilename
 
 if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 if(is.null(FLAGS$extra)){FLAGS$extra <- FALSE}
+
 if(FLAGS$extra){ 
 	RDatadir <- 'simret_extra_RData/' 
 	evaldir <- 'simret_extra_eval_prunetree/' 
 #	cleandir<-'simret_extra_clean/' 
 	cleandir<-'simret_extra_eval/' 
+} else if(!is.null(FLAGS$majprob)){
+	RDatadir <- 'simret_varmaj_RData/' 
+	evaldir <- 'simret_varmaj_eval_prunetree/' 
+#	cleandir<-'simret_extra_clean/' 
+	cleandir<-'simret_varmaj_eval/' 
 } else { 
 	RDatadir <- 'simret_main_RData/' 
 	evaldir <- 'simret_main_eval_prunetree/' 
