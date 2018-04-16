@@ -20,7 +20,7 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
                     make_option(c("-x", "--continuous"), type="logical", default=NULL, help="Whether the predictors X1, X2 are continuous"),
                     make_option(c("-e", "--extra"), type="logical", default=NULL, help="Whether to use extra uncorelated predictors "),
-		    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family")
+                    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family")
                     )
 
 
@@ -52,20 +52,20 @@ if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 if(is.null(FLAGS$extra)){FLAGS$extra <- FALSE}
 
 if(FLAGS$extra){ 
-	RDatadir <- 'simret_extra_RData/' 
-	evaldir <- 'simret_extra_eval_prunetree/' 
-#	cleandir<-'simret_extra_clean/' 
-	cleandir<-'simret_extra_eval/' 
+    RDatadir <- 'simret_extra_RData/' 
+    evaldir <- 'simret_extra_eval_prunetree/' 
+    #	cleandir<-'simret_extra_clean/' 
+    cleandir<-'simret_extra_eval/' 
 } else if(!is.null(FLAGS$majprob)){
-	RDatadir <- 'simret_varmaj_RData/' 
-	evaldir <- 'simret_varmaj_eval_prunetree/' 
-#	cleandir<-'simret_extra_clean/' 
-	cleandir<-'simret_varmaj_eval/' 
+    RDatadir <- 'simret_varmaj_RData/' 
+    evaldir <- 'simret_varmaj_eval_prunetree/' 
+    #	cleandir<-'simret_extra_clean/' 
+    cleandir<-'simret_varmaj_eval/' 
 } else { 
-	RDatadir <- 'simret_main_RData/' 
-	evaldir <- 'simret_main_eval_prunetree/' 
-#	cleandir<-'simret_main_clean/' 
-	cleandir<-'simret_main_eval/' 
+    RDatadir <- 'simret_main_RData/' 
+    evaldir <- 'simret_main_eval_prunetree/' 
+    #	cleandir<-'simret_main_clean/' 
+    cleandir<-'simret_main_eval/' 
 }
 
 
@@ -99,8 +99,8 @@ for (sim in c(minsim:maxsim)){
     if (FLAGS$alg == 'jlcmm'){
         # need classmb since we use lcmm.predict in eval_lcmm_pred_inout
         if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5}
-	if(FLAGS$extra){ if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5+X6+X7+X8+X9+X10 
-		} else { classmb <- ~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10 } } 
+        if(FLAGS$extra){ if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5+X6+X7+X8+X9+X10 
+        } else { classmb <- ~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10 } } 
         currINFO <- unlist(INFO[RET_iter,1:8])
         best_ng <- currINFO['bestng']
 
@@ -135,35 +135,35 @@ for (sim in c(minsim:maxsim)){
                 for (kse in c(0:3)){ RET_iter <- RET_iter+1 }
             } else {
                 load(Rfilename)
-		if(currINFO['nsplit'] <=5){
-			RET[RET_iter,] <- unlist(INFO[RET_iter,])
-                	RET_iter <- RET_iter+1
-			for (kse in c(0:3)){ 
-				RET[RET_iter,] <- unlist(INFO[RET_iter,])
-				RET_iter <- RET_iter+1
-			}  
-		} else {
-			prunecp <- min(cond_ind_tree$cptable[,'CP'][cond_ind_tree$cptable[,'nsplit']<=5])
-			cond_ind_tree <- prune(cond_ind_tree, prunecp)
-			currINFO['nsplit'] <- max(cond_ind_tree$cptable[,'nsplit'])
-			currINFO['nnode'] <- sum(grepl('leaf',cond_ind_tree$frame$var))
+                if(currINFO['nsplit'] <=5){
+                    RET[RET_iter,] <- unlist(INFO[RET_iter,])
+                    RET_iter <- RET_iter+1
+                    for (kse in c(0:3)){ 
+                        RET[RET_iter,] <- unlist(INFO[RET_iter,])
+                        RET_iter <- RET_iter+1
+                    }  
+                } else {
+                    prunecp <- min(cond_ind_tree$cptable[,'CP'][cond_ind_tree$cptable[,'nsplit']<=5])
+                    cond_ind_tree <- prune(cond_ind_tree, prunecp)
+                    currINFO['nsplit'] <- max(cond_ind_tree$cptable[,'nsplit'])
+                    currINFO['nnode'] <- sum(grepl('leaf',cond_ind_tree$frame$var))
 
-                	survs <- survs_v3
-                	survlist <- list(eval=surve, split=survs, init=survi)
+                    survs <- survs_v3
+                    survlist <- list(eval=surve, split=survs, init=survi)
 
-                	idx <- cond_ind_tree$where
-                	idx_test <- predict_class(cond_ind_tree, data_test)
-                	EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                	                              idx, idx_test, pseudo_g, pseudo_g_test)
+                    idx <- cond_ind_tree$where
+                    idx_test <- predict_class(cond_ind_tree, data_test)
+                    EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                  idx, idx_test, pseudo_g, pseudo_g_test)
 
-                	RET[RET_iter,] <- c(currINFO, EVALS)
-                	RET_iter <- RET_iter+1
-			for (kse in c(0:3)){ 
-				RET[RET_iter,] <- c(currINFO, EVALS)
-				RET[RET_iter,2] <- kse
-				RET_iter <- RET_iter+1
-			}  
-		}
+                    RET[RET_iter,] <- c(currINFO, EVALS)
+                    RET_iter <- RET_iter+1
+                    for (kse in c(0:3)){ 
+                        RET[RET_iter,] <- c(currINFO, EVALS)
+                        RET[RET_iter,2] <- kse
+                        RET_iter <- RET_iter+1
+                    }  
+                }
             }
         }
     }

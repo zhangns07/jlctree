@@ -11,7 +11,7 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-o", "--outdir"), type="character", default='.', help="Output directory."),
                     make_option(c("-a", "--struct"), type="character", default='tree',
                                 help="latent class generating structure, tree (4 classes), XOR (2 classes), linear, or nonlinear."),
-                    make_option(c("-b", "--member"), type="character", default='partition',
+                    make_option(c("-b", "--member"), type="character", default=NULL,
                                 help="latent class membership, partition or multinomial"),
                     make_option(c("-g", "--alg"), type="character", default='jlctree', 
                                 help="algorithm: jlctree or jlcmm"),
@@ -20,7 +20,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
                     make_option(c("-x", "--continuous"), type="logical", default=NULL, help="Whether the predictors X1, X2 are continuous"),
                     make_option(c("-e", "--extra"), type="logical", default=NULL, help="Whether to use extra uncorelated predictors "),
-		    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family")
+                    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family"),
+                    make_option(c("-v", "--timevar"), type="logical", default=NULL, help="Time varying")
                     )
 
 
@@ -44,25 +45,30 @@ if (FLAGS$alg == 'jlcmm'){
 PARMS <- get_parms(FLAGS$dist)
 parms <- PARMS$parms; 
 
-opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; 
+opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; opt2$timevar <- NULL
 RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
 Rbasefilename <-RETbasefilename
 
 if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 if(is.null(FLAGS$extra)){FLAGS$extra <- FALSE}
+if(is.null(FLAGS$timevar)){FLAGS$timevar<- FALSE}
 
-if(FLAGS$extra){ 
-	RDatadir <- 'simret_extra_RData/' 
-	evaldir <- 'simret_extra_eval/' 
-	cleandir<-'simret_extra_clean/' 
+if (FLAGS$timevar){
+    RDatadir <- 'simret_timevar_RData/' 
+    evaldir <- 'simret_timevar_eval/' 
+    cleandir<-'simret_timevar_clean/' 
+} else if(FLAGS$extra){ 
+    RDatadir <- 'simret_extra_RData/' 
+    evaldir <- 'simret_extra_eval/' 
+    cleandir<-'simret_extra_clean/' 
 } else if (!is.null(FLAGS$majprob)){
-	RDatadir <- 'simret_varmaj_RData/' 
-	evaldir <- 'simret_varmaj_eval/' 
-	cleandir<-'simret_varmaj_clean/' 
+    RDatadir <- 'simret_varmaj_RData/' 
+    evaldir <- 'simret_varmaj_eval/' 
+    cleandir<-'simret_varmaj_clean/' 
 } else { 
-	RDatadir <- 'simret_main_RData/' 
-	evaldir <- 'simret_main_eval/' 
-	cleandir<-'simret_main_clean/' 
+    RDatadir <- 'simret_main_RData/' 
+    evaldir <- 'simret_main_eval/' 
+    cleandir<-'simret_main_clean/' 
 }
 
 
@@ -86,17 +92,25 @@ if (FLAGS$alg == 'jlcmm'){
 RET_iter <- 1
 
 for (sim in c(minsim:maxsim)){
-    DATA <- gen_data(FLAGS, PARMS,seed=sim)
-    data <- DATA$data; pseudo_g <- DATA$pseudo_g
+    if (FLAGS$timevar){
+        DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim)
+        data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
-    DATA_TEST <- gen_data(FLAGS,PARMS,seed=sim+623)
-    data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
+        DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623)
+        data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
 
+    } else {
+        DATA <- gen_data(FLAGS, PARMS,seed=sim)
+        data <- DATA$data; pseudo_g <- DATA$pseudo_g
+
+        DATA_TEST <- gen_data(FLAGS,PARMS,seed=sim+623)
+        data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
+    }
     if (FLAGS$alg == 'jlcmm'){
         # need classmb since we use lcmm.predict in eval_lcmm_pred_inout
         if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5}
-	if(FLAGS$extra){ if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5+X6+X7+X8+X9+X10 
-		} else { classmb <- ~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10 } } 
+        if(FLAGS$extra){ if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5+X6+X7+X8+X9+X10 
+        } else { classmb <- ~X1+X2+X3+X4+X5+X6+X7+X8+X9+X10 } } 
         currINFO <- unlist(INFO[RET_iter,1:8])
         best_ng <- currINFO['bestng']
 
@@ -106,8 +120,13 @@ for (sim in c(minsim:maxsim)){
         } else {
             load(Rfilename)
             mod <- get(paste0('m',best_ng))
-            EVALS <- eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes,
-                                          PARMS$parms, mod, pseudo_g, pseudo_g_test)
+            if (FLAGS$timevar){
+                EVALS <- eval_lcmm_pred_inout_timevar(data,data_test, FLAGS$dist, PARMS$slopes, 
+                                                      PARMS$parms, mod, pseudo_g, pseudo_g_test)
+            } else {
+                EVALS <- eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes,
+                                              PARMS$parms, mod, pseudo_g, pseudo_g_test)
+            }
         }
         RET[RET_iter,] <- c(currINFO, EVALS)
         RET_iter <- RET_iter+1
@@ -116,11 +135,15 @@ for (sim in c(minsim:maxsim)){
         if (FLAGS$stop_thre==-1){
             idx <- rep(1,nrow(data))
             idx_test <- rep(1,nrow(data_test))
-            EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                                          idx, idx_test, pseudo_g, pseudo_g_test)
+            if (FLAGS$timevar){
+                EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                      idx, idx_test, pseudo_g, pseudo_g_test)
+            } else {
+                EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                              idx, idx_test, pseudo_g, pseudo_g_test)
+            }
             RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, nnode=1,EVALS)
             RET_iter <- RET_iter+1
-
         } else {
             currINFO <- unlist(INFO[RET_iter, c(1:5)])
             Rfilename <- paste0(FLAGS$outdir,'/',RDatadir, Rbasefilename,'_sim_',sim,'.RData')
@@ -136,8 +159,13 @@ for (sim in c(minsim:maxsim)){
 
                 idx <- cond_ind_tree$where
                 idx_test <- predict_class(cond_ind_tree, data_test)
-                EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                                              idx, idx_test, pseudo_g, pseudo_g_test)
+                if (FLAGS$timevar){
+                    EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                          idx, idx_test, pseudo_g, pseudo_g_test)
+                } else {
+                    EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                  idx, idx_test, pseudo_g, pseudo_g_test)
+                }
 
                 RET[RET_iter,] <- c(currINFO, EVALS)
                 RET_iter <- RET_iter+1
@@ -160,8 +188,8 @@ for (sim in c(minsim:maxsim)){
                         } else {
                             idx <- cond_ind_tree_prune$where
                             idx_test <- predict_class(cond_ind_tree_prune, data_test)
-                            EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                                                          idx, idx_test, pseudo_g, pseudo_g_test)
+                            EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                                  idx, idx_test, pseudo_g, pseudo_g_test)
                             RET[RET_iter,] <- c(sim,k=kse, currINFO['runtime'], nsplit_prune, nnode_prune, EVALS)
                         }
                         RET_iter <- RET_iter+1
