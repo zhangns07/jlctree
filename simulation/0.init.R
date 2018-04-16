@@ -1071,8 +1071,13 @@ gen_data_timevar <- function(FLAGS, PARMS, seed){
     X4 <- round(runif(2*Nsub),1)
     X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
 
-    g <- get_latent_class(X1,X2,FLAGS$struct, FLAGS$member, seed=seed, FLAGS$majprob)
-    g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, FLAGS$member, seed=seed, FLAGS$majprob)
+    if (FLAGS$majprob==1){
+        g <- get_latent_class(X1,X2,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
+        g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
+    } else {
+        g <- get_latent_class(X1,X2,FLAGS$struct, 'multinomial', seed=seed, FLAGS$majprob)
+        g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, 'multinomial', seed=seed, FLAGS$majprob)
+    }
 
     X <- cbind(X1,X2,X3,X4,X5, X1_next, X2_next)
 
