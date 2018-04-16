@@ -97,11 +97,19 @@ if (FLAGS$alg == 'jlcmm'){
 RET_iter <- 1
 
 for (sim in c(minsim:maxsim)){
-    DATA <- gen_data(FLAGS, PARMS,seed=sim)
-    data <- DATA$data; pseudo_g <- DATA$pseudo_g
+    if (FLAGS$timevar){
+        DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim)
+        data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
-    DATA_TEST <- gen_data(FLAGS,PARMS,seed=sim+623)
-    data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
+        DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623)
+        data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
+    } else {
+        DATA <- gen_data(FLAGS, PARMS,seed=sim)
+        data <- DATA$data; pseudo_g <- DATA$pseudo_g
+
+        DATA_TEST <- gen_data(FLAGS,PARMS,seed=sim+623)
+        data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
+    }
 
     if (FLAGS$alg == 'jlctree'){
         currINFO <- unlist(INFO[RET_iter, c(1:5)])
