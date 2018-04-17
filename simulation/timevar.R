@@ -19,7 +19,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
                     make_option(c("-x", "--continuous"), type="logical", default=TRUE, help="Whether the predictors X1, X2 are continuous"),
-                    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family")
+                    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family"),
+                    make_option(c("-w", "--survvar"), type="logical", default=NULL, help="Whether X3-X5 is time varying")
                     )
 
 
@@ -43,13 +44,23 @@ if (FLAGS$alg == 'jlcmm'){
 PARMS <- get_parms(FLAGS$dist); parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D; 
 Nsim <- FLAGS$maxsim-FLAGS$minsim+1
 
-opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; 
+opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; opt2$survvar <- NULL
 RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
 
-opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL
+opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL; opt3$survvar <- NULL
 Rbasefilename <- paste0(paste0(names(opt3),"_",opt3),collapse="_")
 
 if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
+if(is.null(FLAGS$survvar)){FLAGS$survvar <- FALSE}
+
+if (FLAGS$survvar){
+    RDatadir <- 'simret_survvar_RData/' 
+    RETdir <- 'simret_survvar/'
+} else {
+    RDatadir <- 'simret_timevar_RData/' 
+    RETdir <- 'simret_timevar/'
+} 
+
 if (FLAGS$alg == 'jlcmm'){
     RET <- matrix(0,ncol=8,nrow=Nsim)
     colnames(RET) <- c('sim','runtime','bestng','B2','B3','B4','B5','B6')
@@ -63,10 +74,10 @@ RET_iter <- 1
 for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
 
-    DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim)
+    DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim, FLAGS$survvar)
     data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
-    DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623)
+    DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623, FLAGS$survvar)
     data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
 
     if (FLAGS$alg == 'jlcmm'){
@@ -113,7 +124,8 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
         tok <- Sys.time()
 
         best_ng <- which.min(BICs)
-        Rfilename <- paste0(FLAGS$outdir,'/simret_timevar_RData/',Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
+
+        Rfilename <- paste0(FLAGS$outdir,'/', RDatadir, Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
         save(list=paste0('m',best_ng), file=Rfilename)
 
         mod <- get(paste0('m',best_ng))
@@ -175,14 +187,14 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                 RET_iter <- RET_iter+1
 
             }
-            Rfilename <- paste0(FLAGS$outdir,'/simret_timevar_RData/',Rbasefilename,'_sim_',sim,'.RData')
+            Rfilename <- paste0(FLAGS$outdir,'/',RDatadir,Rbasefilename,'_sim_',sim,'.RData')
             save(cond_ind_tree, cptable, file=Rfilename)
         }
     }
 
     cat('sim: ',sim,'\n')
 
-    filename <- paste0(FLAGS$outdir,'/simret_timevar/',RETbasefilename,'.csv')
+    filename <- paste0(FLAGS$outdir,'/',RETdir, RETbasefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
 
