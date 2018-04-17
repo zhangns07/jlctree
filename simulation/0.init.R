@@ -1043,7 +1043,7 @@ eval_lcmm_pred_inout <- function
 }
 
 
-gen_data_timevar <- function(FLAGS, PARMS, seed){
+gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
 
     Nsub <- FLAGS$Nsub
     censor_rate <- FLAGS$censor
@@ -1071,6 +1071,14 @@ gen_data_timevar <- function(FLAGS, PARMS, seed){
     X4 <- round(runif(2*Nsub),1)
     X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
 
+    if (survvar){
+        X3_next <- as.numeric(runif(2*Nsub)>0.5)
+        X4_next <- round(pmax(pmin(X4 + runif(2*Nsub, min=-0.3, max=0.3),1),0),1)
+        X5_next <- pmax(pmin(X5+sample(c(0,-1,1),2*Nsub,replace=TRUE),5),1)
+    } else {
+        X3_next <- X3; X4_next <- X4; X5_next <- X5
+    }
+
     if (FLAGS$majprob==1){
         g <- get_latent_class(X1,X2,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
         g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
@@ -1079,10 +1087,10 @@ gen_data_timevar <- function(FLAGS, PARMS, seed){
         g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, 'multinomial', seed=seed, FLAGS$majprob)
     }
 
-    X <- cbind(X1,X2,X3,X4,X5, X1_next, X2_next)
+    X <- cbind(X1,X2,X3,X4,X5, X1_next, X2_next, X3_next, X4_next, X5_next)
 
     ebx1 <- exp(rowSums(slopes[g,] * cbind(X3,X4,X5))) 
-    ebx2 <- exp(rowSums(slopes[g_next,] * cbind(X3,X4,X5))) 
+    ebx2 <- exp(rowSums(slopes[g_next,] * cbind(X3_next,X4_next,X5_next))) 
     ebx <- cbind(ebx1,ebx2)
     changepoint <- runif(2*Nsub, min=1,max=3)
     time_T <- gen_model4_survival(ebx,dist,parms,changepoint)
@@ -1119,7 +1127,9 @@ gen_data_timevar <- function(FLAGS, PARMS, seed){
                                tmp_time_Y <- tmp_time[-1]
                                tmp_delta <- c(rep(0,num_i-1),delta[i])
                                ret <- cbind(ID=i, 
-                                            X1=c(X[i,1], X[i,6])[1:num_i], X2=c(X[i,2],X[i,7])[1:num_i])
+                                            X1=c(X[i,1], X[i,6])[1:num_i], X2=c(X[i,2],X[i,7])[1:num_i],
+                                            X3=c(X[i,3], X[i,8])[1:num_i], X4=c(X[i,4],X[i,9])[1:num_i],
+                                            X5=c(X[i,5], X[i,10])[1:num_i])
 
                            } else if (FLAGS$alg == 'jlcmm'){
                                tmp_time_L <- rep(time_L[i],num_i)
@@ -1127,12 +1137,11 @@ gen_data_timevar <- function(FLAGS, PARMS, seed){
                                tmp_delta <- rep(delta[i],num_i)
                                tmp_changepoint <- rep(changepoint[i], num_i)
                                ret <- cbind(ID=i, changepoint=tmp_changepoint,
-                                            X1=rep(X[i,1], num_i), X2=rep(X[i,2],num_i))
+                                            X1=rep(X[i,1], num_i), X2=rep(X[i,2],num_i),
+                                            X3=rep(X[i,3], num_i), X4=rep(X[i,4],num_i),X5=rep(X[i,5],num_i))
                            }
 
-                           ret <- cbind(ret,X3=rep(X[i,3],num_i),
-                                        X4=rep(X[i,4],num_i), X5=rep(X[i,5],num_i),
-                                        g = c(g[i],g_next[i])[1:num_i],
+                           ret <- cbind(ret, g = c(g[i],g_next[i])[1:num_i],
                                         time_L=tmp_time_L, time_Y=tmp_time_Y, delta=tmp_delta)})
 
     ranef <- rnorm(Nsub, sd=sd_ranef)
@@ -1142,15 +1151,6 @@ gen_data_timevar <- function(FLAGS, PARMS, seed){
     y <- fixef[pseudo_g] + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
     data <- cbind(LTRC_data,y)
 
-    if(!is.null(FLAGS$extra)){
-        if( FLAGS$extra ){ # add extra unrelated predictors
-        X6 <- (round(runif(Nsub),2))[LTRC_data$ID]
-        X7 <- (round(runif(Nsub),2))[LTRC_data$ID]
-        X8 <- (as.numeric(runif(Nsub)>0.5))[LTRC_data$ID]
-        X9 <- (round(runif(Nsub),1))[LTRC_data$ID]
-        X10 <- (sample(c(1:5),Nsub,replace=TRUE))[LTRC_data$ID]
-        data <- cbind(data, X6,X7,X8,X9,X10)
-    }}
     return(list(data=data,pseudo_g=pseudo_g))
 }
 
