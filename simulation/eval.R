@@ -21,7 +21,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=200, 
                     make_option(c("-x", "--continuous"), type="logical", default=NULL, help="Whether the predictors X1, X2 are continuous"),
                     make_option(c("-e", "--extra"), type="logical", default=NULL, help="Whether to use extra uncorelated predictors "),
                     make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family"),
-                    make_option(c("-v", "--timevar"), type="logical", default=NULL, help="Time varying")
+                    make_option(c("-v", "--timevar"), type="logical", default=NULL, help="Time varying"),
+                    make_option(c("-w", "--survvar"), type="logical", default=NULL, help="Whether X3-X5 is Time varying")
                     )
 
 
@@ -45,15 +46,20 @@ if (FLAGS$alg == 'jlcmm'){
 PARMS <- get_parms(FLAGS$dist)
 parms <- PARMS$parms; 
 
-opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; opt2$timevar <- NULL
+opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; opt2$timevar <- NULL; opt2$survvar <- NULL
 RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
-Rbasefilename <-RETbasefilename
+Rbasefilename <- RETbasefilename
 
 if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 if(is.null(FLAGS$extra)){FLAGS$extra <- FALSE}
-if(is.null(FLAGS$timevar)){FLAGS$timevar<- FALSE}
+if(is.null(FLAGS$timevar)){FLAGS$timevar <- FALSE}
+if(is.null(FLAGS$survvar)){FLAGS$survvar <- FALSE}
 
-if (FLAGS$timevar){
+if (FLAGS$survvar){
+    RDatadir <- 'simret_survvar_RData/' 
+    evaldir <- 'simret_survvar_eval/' 
+    cleandir<-'simret_survvar_clean/' 
+} else if (FLAGS$timevar){
     RDatadir <- 'simret_timevar_RData/' 
     evaldir <- 'simret_timevar_eval/' 
     cleandir<-'simret_timevar_clean/' 
@@ -93,10 +99,10 @@ RET_iter <- 1
 
 for (sim in c(minsim:maxsim)){
     if (FLAGS$timevar){
-        DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim)
+        DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim, FLAGS$survvar)
         data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
-        DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623)
+        DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623, FLAGS$survvar)
         data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
 
     } else {

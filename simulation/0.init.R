@@ -1138,7 +1138,10 @@ gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
                                tmp_changepoint <- rep(changepoint[i], num_i)
                                ret <- cbind(ID=i, changepoint=tmp_changepoint,
                                             X1=rep(X[i,1], num_i), X2=rep(X[i,2],num_i),
-                                            X3=rep(X[i,3], num_i), X4=rep(X[i,4],num_i),X5=rep(X[i,5],num_i))
+                                            X3=rep(X[i,3], num_i), X4=rep(X[i,4],num_i),X5=rep(X[i,5],num_i),
+                                            X3_true=c(X[i,3], X[i,8])[1:num_i], X4_true=c(X[i,4],X[i,9])[1:num_i],
+                                            X5_true=c(X[i,5], X[i,10])[1:num_i])
+
                            }
 
                            ret <- cbind(ret, g = c(g[i],g_next[i])[1:num_i],
@@ -1221,58 +1224,43 @@ eval_tree_pred_inout_timevar <- function
             ISE <- ISE + get_tree_ISE(mod, sdata, sg, evaltimes, dist, slopes,parms,KM)
         } else {
             # Shat
-            if (si[1]==si[2]){
-                mod <- get(paste0('mod',si[1])); KM <- get(paste0('KM',si[1]));
-                if(!KM){ Shat <- getsurv(survfit(mod,newdata=sdata[1,]),evaltimes)
-                } else{ Shat <- getsurv(survfit(mod),evaltimes) }
-            } else {
-                SHAT <- matrix(0,nrow=2,ncol=length(evaltimes))
-                prob <- rep(0,2)
-                for (i in c(1:2)){
-                    mod <- get(paste0('mod',si[i])); KM <- get(paste0('KM',si[i]));
-                    if(!KM){ 
-                        SHAT[i,] <- getsurv(survfit(mod,newdata=sdata[i,]),evaltimes)
-                        prob[i] <- getsurv(survfit(mod,newdata=sdata[i,]),changepoint)
-                    } else{ 
-                        SHAT[i,]<- getsurv(survfit(mod),evaltimes) 
-                        prob[i] <- getsurv(survfit(mod),changepoint)
-                    }
+            SHAT <- matrix(0,nrow=2,ncol=length(evaltimes))
+            prob <- rep(0,2)
+            for (i in c(1:2)){
+                mod <- get(paste0('mod',si[i])); KM <- get(paste0('KM',si[i]));
+                if(!KM){ 
+                    SHAT[i,] <- getsurv(survfit(mod,newdata=sdata[i,]),evaltimes)
+                    prob[i] <- getsurv(survfit(mod,newdata=sdata[i,]),changepoint)
+                } else{ 
+                    SHAT[i,]<- getsurv(survfit(mod),evaltimes) 
+                    prob[i] <- getsurv(survfit(mod),changepoint)
                 }
-                Shat <- c(SHAT[1,1:(changepoint_timeidx-1)], SHAT[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
             }
-
+            Shat <- c(SHAT[1,1:(changepoint_timeidx-1)], SHAT[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
 
             # True S
-            if (sg[1]==sg[2]){
-                tmpebx <- exp(sum(slopes[sg[1],] * sdata[1,c('X3','X4','X5')]))
+            STRUE <- matrix(0,nrow=2,ncol=length(evaltimes))
+            prob <- rep(0,2)
+            for(i in c(1:2)){
+                tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
                 if (dist=='exponential'){
-                    Strue <- exp(-tmpebx*evaltimes*parms$lambda)
+                    STRUE[i,] <- exp(-tmpebx*evaltimes*parms$lambda)
+                    prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
                 } else if (dist=='weibulld' | dist=='weibulli'){
-                    Strue <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
+                    STRUE[i,] <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
+                    prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
                 } 
-            } else{
-                STRUE <- matrix(0,nrow=2,ncol=length(evaltimes))
-                prob <- rep(0,2)
-                for(i in c(1:2)){
-                    tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
-                    if (dist=='exponential'){
-                        STRUE[i,] <- exp(-tmpebx*evaltimes*parms$lambda)
-                        prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
-                    } else if (dist=='weibulld' | dist=='weibulli'){
-                        STRUE[i,] <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
-                        prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
-                    } 
-                }
-
-                Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
-                          STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
             }
+
+            Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
+                      STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
+
 
             scores <- (Shat - Strue)^2
             ISE <- ISE + sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes)) / diff(range(evaltimes))
         }
-
     }
+
     ISE <- ISE / length(unique(data$ID))
 
     # ---------- ISE out of sample
@@ -1292,58 +1280,42 @@ eval_tree_pred_inout_timevar <- function
             KM <- get(paste0('KM',si));
             ISE_test <- ISE_test + get_tree_ISE(mod, sdata, sg, evaltimes_test, dist, slopes,parms,KM)
         } else {
-            # Shat
-            if (si[1]==si[2]){
-                mod <- get(paste0('mod',si[1])); KM <- get(paste0('KM',si[1]));
-                if(!KM){ Shat <- getsurv(survfit(mod,newdata=sdata[1,]),evaltimes_test)
-                } else{ Shat <- getsurv(survfit(mod),evaltimes_test) }
-            } else {
-                SHAT <- matrix(0,nrow=2,ncol=ntimes)
-                prob <- rep(0,2)
-                for (i in c(1:2)){
-                    mod <- get(paste0('mod',si[i])); KM <- get(paste0('KM',si[i]));
-                    if(!KM){ 
-                        SHAT[i,] <- getsurv(survfit(mod,newdata=sdata[i,]),evaltimes_test)
-                        prob[i] <- getsurv(survfit(mod,newdata=sdata[i,]),changepoint)
-                    } else{ 
-                        SHAT[i,]<- getsurv(survfit(mod),evaltimes_test) 
-                        prob[i] <- getsurv(survfit(mod),changepoint)
-                    }
+            SHAT <- matrix(0,nrow=2,ncol=ntimes)
+            prob <- rep(0,2)
+            for (i in c(1:2)){
+                mod <- get(paste0('mod',si[i])); KM <- get(paste0('KM',si[i]));
+                if(!KM){ 
+                    SHAT[i,] <- getsurv(survfit(mod,newdata=sdata[i,]),evaltimes_test)
+                    prob[i] <- getsurv(survfit(mod,newdata=sdata[i,]),changepoint)
+                } else{ 
+                    SHAT[i,]<- getsurv(survfit(mod),evaltimes_test) 
+                    prob[i] <- getsurv(survfit(mod),changepoint)
                 }
-                Shat <- c(SHAT[1,1:(changepoint_timeidx-1)], SHAT[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
             }
-
+            Shat <- c(SHAT[1,1:(changepoint_timeidx-1)], SHAT[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
 
             # True S
-            if (sg[1]==sg[2]){
-                tmpebx <- exp(sum(slopes[sg[1],] * sdata[1,c('X3','X4','X5')]))
+            STRUE <- matrix(0,nrow=2,ncol=ntimes)
+            prob <- rep(0,2)
+            for(i in c(1:2)){
+                tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
                 if (dist=='exponential'){
-                    Strue <- exp(-tmpebx*evaltimes_test*parms$lambda)
+                    STRUE[i,] <- exp(-tmpebx*evaltimes_test*parms$lambda)
+                    prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
                 } else if (dist=='weibulld' | dist=='weibulli'){
-                    Strue <- exp(-(evaltimes_test/parms$beta)^(parms$alp) * tmpebx)
+                    STRUE[i,] <- exp(-(evaltimes_test/parms$beta)^(parms$alp) * tmpebx)
+                    prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
                 } 
-            } else{
-                STRUE <- matrix(0,nrow=2,ncol=ntimes)
-                prob <- rep(0,2)
-                for(i in c(1:2)){
-                    tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
-                    if (dist=='exponential'){
-                        STRUE[i,] <- exp(-tmpebx*evaltimes_test*parms$lambda)
-                        prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
-                    } else if (dist=='weibulld' | dist=='weibulli'){
-                        STRUE[i,] <- exp(-(evaltimes_test/parms$beta)^(parms$alp) * tmpebx)
-                        prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
-                    } 
-                }
-
-                Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
-                          STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
             }
+
+            Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
+                      STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
 
             scores <- (Shat - Strue)^2
             ISE_test <- ISE_test + sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes_test)) / diff(range(evaltimes_test))
         }
     }
+
     ISE_test <- ISE_test / length(unique(data_test$ID))
 
     # ---------- Biomarker Prediction
@@ -1391,6 +1363,7 @@ get_lcmm_ISE_timevar <- function(mod, data, g, predclass, dist, slopes, parms){
         si <- subset(predclass, data$ID==x)
         changepoint <- sdata$changepoint[1]
         changepoint_timeidx <-  which(changepoint < times)[1]
+        ns <- nrow(sdata)
 
         if (!avg){
             tmpc <- si[1]
@@ -1405,27 +1378,22 @@ get_lcmm_ISE_timevar <- function(mod, data, g, predclass, dist, slopes, parms){
             Shat<- c(Shat_raw %*% si[1,])
         }
 
-        if (length(sg)==1 | sg[1]==sg[2]){
-            tmpebx <- exp(sum(slopes[sg[1],] * sdata[1,c('X3','X4','X5')]))
-            if (dist=='exponential'){
-                Strue <- exp(-tmpebx*times*parms$lambda)
-            } else if (dist=='weibulld' | dist=='weibulli'){
-                Strue <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
-            } 
-        } else{
-            STRUE <- matrix(0,nrow=2,ncol=ntimes)
-            prob <- rep(0,2)
-            for(i in c(1:2)){
-                tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
-                if (dist=='exponential'){
-                    STRUE[i,] <- exp(-tmpebx*times*parms$lambda)
-                    prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
-                } else if (dist=='weibulld' | dist=='weibulli'){
-                    STRUE[i,] <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
-                    prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
-                } 
-            }
 
+        STRUE <- matrix(0,nrow=2,ncol=ntimes)
+        prob <- rep(0,2)
+        for(i in c(1:ns)){
+            tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3_true','X4_true','X5_true')]))
+            if (dist=='exponential'){
+                STRUE[i,] <- exp(-tmpebx*times*parms$lambda)
+                prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
+            } else if (dist=='weibulld' | dist=='weibulli'){
+                STRUE[i,] <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
+                prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
+            } 
+        }
+        if (ns==1){
+            Strue <- STRUE[1,]
+        } else {
             Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
                       STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
         }
