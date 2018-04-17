@@ -98,7 +98,7 @@ if (FLAGS$alg == 'jlcmm'){
 RET_iter <- 1
 
 for (sim in c(minsim:maxsim)){
-    if (FLAGS$timevar){
+    if (FLAGS$timevar || FLAGS$survvar){
         DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim, FLAGS$survvar)
         data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
