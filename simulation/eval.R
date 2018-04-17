@@ -126,7 +126,7 @@ for (sim in c(minsim:maxsim)){
         } else {
             load(Rfilename)
             mod <- get(paste0('m',best_ng))
-            if (FLAGS$timevar){
+            if (FLAGS$timevar || FLAGS$survvar){
                 EVALS <- eval_lcmm_pred_inout_timevar(data,data_test, FLAGS$dist, PARMS$slopes, 
                                                       PARMS$parms, mod, pseudo_g, pseudo_g_test)
             } else {
@@ -141,7 +141,7 @@ for (sim in c(minsim:maxsim)){
         if (FLAGS$stop_thre==-1){
             idx <- rep(1,nrow(data))
             idx_test <- rep(1,nrow(data_test))
-            if (FLAGS$timevar){
+            if (FLAGS$timevar || FLAGS$survvar){
                 EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
                                                       idx, idx_test, pseudo_g, pseudo_g_test)
             } else {
@@ -165,7 +165,7 @@ for (sim in c(minsim:maxsim)){
 
                 idx <- cond_ind_tree$where
                 idx_test <- predict_class(cond_ind_tree, data_test)
-                if (FLAGS$timevar){
+                if (FLAGS$timevar || FLAGS$survvar){
                     EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
                                                           idx, idx_test, pseudo_g, pseudo_g_test)
                 } else {
@@ -194,8 +194,13 @@ for (sim in c(minsim:maxsim)){
                         } else {
                             idx <- cond_ind_tree_prune$where
                             idx_test <- predict_class(cond_ind_tree_prune, data_test)
-                            EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
-                                                                  idx, idx_test, pseudo_g, pseudo_g_test)
+                            if (FLAGS$timevar || FLAGS$survvar){
+                                EVALS <- eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                                      idx, idx_test, pseudo_g, pseudo_g_test)
+                            } else {
+                                EVALS <- eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms,
+                                                              idx, idx_test, pseudo_g, pseudo_g_test)
+                            }
                             RET[RET_iter,] <- c(sim,k=kse, currINFO['runtime'], nsplit_prune, nnode_prune, EVALS)
                         }
                         RET_iter <- RET_iter+1
