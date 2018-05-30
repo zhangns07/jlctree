@@ -1,13 +1,5 @@
 # The main model.
-# No evaluation.
-# Options:
-# - data generating: Nsub, censor, dist
-# - bookkeeping: outdir, minsim, maxsim
-# - latent class structure: structure=c('tree','linear','nonlinear')
-# - latent class membership: membership=c('partition','multinomial')
-# - alg=c('jlctree','jclmm')
-# - jlctree specific: stop_thre, test
-# - continuous: whether X1 and X2 are continuous.
+# All X1 - X5 will change.
 library(optparse)
 library(data.table)
 library(plyr)
@@ -22,21 +14,20 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                     make_option(c("-u", "--maxsim"), type="numeric", default=200, help="max sim"),
                     make_option(c("-a", "--struct"), type="character", default='tree',
                                 help="latent class generating structure, tree (4 classes), XOR (2 classes), linear, or nonlinear."),
-                    make_option(c("-b", "--member"), type="character", default='partition',
-                                help="latent class membership, partition or multinomial"),
                     make_option(c("-g", "--alg"), type="character", default='jlctree', 
                                 help="algorithm: jlctree or jlcmm"),
                     make_option(c("-s", "--stop_thre"), type="numeric", default=NULL, help=""),
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-i", "--inter"), type="logical", default=NULL, help="Whether to use interaction term in classmb"),
-                    make_option(c("-x", "--continuous"), type="logical", default=FALSE, help="Whether the predictors X1, X2 are continuous")
+                    make_option(c("-x", "--continuous"), type="logical", default=TRUE, help="Whether the predictors X1, X2 are continuous"),
+                    make_option(c("-m", "--majprob"), type="numeric", default=NULL, help="Maximum probablity for majority family")
                     )
 
 
 opt_parser <- OptionParser(option_list=option_list);
 opt <- parse_args(opt_parser);
-
 FLAGS <- opt
+
 if (FLAGS$alg == 'jlctree'){
 #    FLAGS$stop_thre=3.84; FLAGS$test='lrt'
     if (is.null(FLAGS$stop_thre) | is.null(FLAGS$test)){
@@ -50,7 +41,6 @@ if (FLAGS$alg == 'jlcmm'){
     }
 }
 
-#FLAGS$Nsub=500;FLAGS$continuous=TRUE;
 PARMS <- get_parms(FLAGS$dist); parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D; 
 Nsim <- FLAGS$maxsim-FLAGS$minsim+1
 
@@ -74,10 +64,10 @@ RET_iter <- 1
 for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
 
-    DATA <- gen_data(FLAGS, PARMS,seed=sim)
+    DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim,survvar=TRUE)
     data <- DATA$data; pseudo_g <- DATA$pseudo_g
 
-    DATA_TEST <- gen_data(FLAGS,PARMS,seed=sim+623)
+    DATA_TEST <- gen_data_timevar(FLAGS,PARMS,seed=sim+623, survvar=TRUE)
     data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
 
     if (FLAGS$alg == 'jlcmm'){
@@ -120,23 +110,24 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
             }
 
             assign(paste0('m',ng), mod)
-            Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_ng_',ng,'_sim_',sim,'.RData')
-            save(list=paste0('m',ng), file=Rfilename)
         }
         tok <- Sys.time()
 
         best_ng <- which.min(BICs)
+        Rfilename <- paste0(FLAGS$outdir,'/simret_timevar_RData/',Rbasefilename,'_ng_',best_ng,'_sim_',sim,'.RData')
+        save(list=paste0('m',best_ng), file=Rfilename)
+
         mod <- get(paste0('m',best_ng))
         runtime <- round(difftime(tok,tik,units='secs'),4)
         RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6])
-        #eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes, PARMS$parms, mod, pseudo_g, pseudo_g_test)
+        #eval_lcmm_pred_inout_timevar(data,data_test, FLAGS$dist, PARMS$slopes, PARMS$parms, mod, pseudo_g, pseudo_g_test)
 
         RET_iter <- RET_iter+1
     } else if (FLAGS$alg == 'jlctree'){
 
         if (FLAGS$stop_thre==-1){
             RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, nnode=1)
-            #eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, rep(1,nrow(data)), rep(1,nrow(data_test)), pseudo_g, pseudo_g_test)
+            #eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, rep(1,nrow(data)), rep(1,nrow(data_test)), pseudo_g, pseudo_g_test)
             RET_iter <- RET_iter+1
         } else {
             survs <- survs_v3
@@ -163,7 +154,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
             nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
             nnode <- sum(grepl('leaf',cond_ind_tree$frame$var))
             RET[RET_iter,] <- c(sim,k=-Inf, runtime, nsplit, nnode)
-            #idx <- cond_ind_tree$where; idx_test <- predict_class(cond_ind_tree, data_test); eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, idx, idx_test, pseudo_g, pseudo_g_test)
+            #idx <- cond_ind_tree$where; idx_test <- predict_class(cond_ind_tree, data_test); eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, idx, idx_test, pseudo_g, pseudo_g_test)
             RET_iter <- RET_iter+1
 
             for (kse in c(0:3)){
@@ -180,18 +171,20 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                     RET[RET_iter,] <- c(sim,k=kse, runtime, nsplit_prune, nnode_prune)
                 }
 
-                #idx <- cond_ind_tree_prune$where; idx_test <- predict_class(cond_ind_tree_prune, data_test); eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, idx, idx_test, pseudo_g, pseudo_g_test)
+                #idx <- cond_ind_tree_prune$where; idx_test <- predict_class(cond_ind_tree_prune, data_test); eval_tree_pred_inout_timevar(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, idx, idx_test, pseudo_g, pseudo_g_test)
 
                 RET_iter <- RET_iter+1
 
             }
-            Rfilename <- paste0(FLAGS$outdir,'/simret_main_RData/',Rbasefilename,'_sim_',sim,'.RData')
+            Rfilename <- paste0(FLAGS$outdir,'/simret_timevar_RData/',Rbasefilename,'_sim_',sim,'.RData')
             save(cond_ind_tree, cptable, file=Rfilename)
         }
     }
 
     cat('sim: ',sim,'\n')
 
-    filename <- paste0(FLAGS$outdir,'/simret_main/',RETbasefilename,'.csv')
+    filename <- paste0(FLAGS$outdir,'/simret_timevar/',RETbasefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
+
+

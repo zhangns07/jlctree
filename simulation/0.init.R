@@ -2,6 +2,7 @@ library(survival)
 library(rpart)
 library(lme4)
 library(ipred)
+library(prodlim)
 
 
 survi<- function
@@ -308,17 +309,6 @@ survs_v3<- function
     list(goodness=goodness, direction=direction)
 }
 
-
-get_node_val_OLD <- function
-(f1,f2,data, 
- loglik = c(1,0)[1]){
-    if (!loglik ){
-        ret <- get_rsquare(f1, data)
-    } else if (loglik){
-        ret <- get_loglik_diff(f1, f2, data)
-    }
-    return (ret)
-}
 
 get_node_val<- function
 (f1,f2,data, 
@@ -1456,4 +1446,230 @@ eval_lcmm_pred_inout_timevar <- function
 
 
 
+getsurv <- function (obj, times)
+{
+    if (!inherits(obj, "survfit"))
+        stop("obj is not of class survfit")
+    class(obj) <- NULL
+    lt <- length(times)
+    nsurv <- times
+    if (length(times) == length(obj$time)) {
+        if (all(times == obj$time))
+            return(obj$surv)
+    }
+    inside <- times %in% obj$time
+    for (i in (1:lt)) {
+        if (inside[i])
+            nsurv[i] <- obj$surv[obj$time == times[i]]
+        else if (max(obj$time) < times[i])
+            nsurv[i] <- 0
+        else {
+            less <- obj$time[obj$time < times[i]]
+            if (length(less) == 0)
+                nsurv[i] <- 1
+            else nsurv[i] <- obj$surv[obj$time == max(less)]
+        }
+    }
+    nsurv
+}
 
+
+sbrier <- function(obj, pred, btime = range(obj[,1]))
+{
+    if(!inherits(obj, "Surv"))
+        stop("obj is not of class Surv")
+
+    # check for right censoring
+
+    # <FIXME>
+    class(obj) <- NULL
+    # </FIXME>
+    if (attr(obj, "type") != "right")
+        stop("only right-censoring allowed")
+    N <- nrow(obj)
+
+    # get the times and censoring of the data, order them with resp. to time
+
+    time <- obj[,1]
+    ot <- order(time)
+    cens <- obj[ot,2]
+    time <- time[ot]
+
+    # get the times to compute the (integrated) Brier score over
+
+    if (is.null(btime)) stop("btime not given")
+    if (length(btime) < 1) stop("btime not given")
+
+    if (length(btime) == 2) {
+        if (btime[1] < min(time)) warning("btime[1] is smaller than min(time)")
+        if (btime[2] > max(time)) warning("btime[2] is larger than max(time)")
+        btime <- time[time >= btime[1] & time <=
+                                          btime[2]]
+    }
+
+    ptype <- class(pred)
+    # <begin> S3 workaround
+    if (is.null(ptype)) {
+      if (is.vector(pred)) ptype <- "vector"
+      if (is.list(pred)) ptype <- "list"
+    }
+    # <end>
+    if (ptype == "numeric" && is.vector(pred)) ptype <- "vector"
+
+    survs <- NULL
+    switch(ptype, survfit = {
+        survs <- getsurv(pred, btime)
+        survs <- matrix(rep(survs, N), nrow=length(btime))
+    }, list = {
+        if (!inherits(pred[[1]], "survfit")) stop("pred is not a list of survfit objects") 
+        if (length(pred) != N) stop("pred must be of length(time)")
+        pred <- pred[ot]
+        survs <-  matrix(unlist(lapply(pred, getsurv, times = btime)),
+                                nrow=length(btime), ncol=N)
+    }, vector = {
+        if (length(pred) != N) stop("pred must be of length(time)")
+        if (length(btime) != 1) stop("cannot compute integrated Brier score with pred")
+        survs <- pred[ot]
+    }, matrix = {
+        # <FIXME>
+        if (all(dim(pred) == c(length(btime), N)))
+            survs <- pred[,ot]
+        else
+            stop("wrong dimensions of pred")
+        # </FIXME>
+    })
+    if (is.null(survs)) stop("unknown type of pred")
+
+    # reverse Kaplan-Meier: estimate censoring distribution
+
+    ### deal with ties
+    hatcdist <- prodlim(Surv(time, cens) ~ 1,reverse = TRUE)
+    # hatcdist <- survfit(Surv(time, 1 - cens) ~ 1)
+    # csurv <- getsurv(hatcdist, time)
+    # csurv[csurv == 0] <- Inf
+
+    bsc <- rep(0, length(btime))
+
+    # compute Lebesque-integrated Brier score
+
+    if (length(btime) > 1) {
+        csurv <- predict(hatcdist, times = btime, type = "surv")
+        #csurv <- predict(hatcdist, times = time, type = "surv")
+        csurv[csurv == 0] <- Inf
+
+        for (j in 1:length(btime)) {
+            help1 <- as.integer(time <= btime[j] & cens == 1)
+            help2 <- as.integer(time > btime[j])
+            bsc[j] <-  mean((0 - survs[j,])^2*help1*(1/csurv[j]) +
+                            (1-survs[j,])^2*help2*(1/csurv[j]))
+        }
+
+        ### apply trapezoid rule
+        idx <- 2:length(btime)
+        RET <- diff(btime) %*% ((bsc[idx - 1] + bsc[idx]) / 2)
+        RET <- RET / diff(range(btime))
+
+        ### previously was
+        #diffs <- c(btime[1], btime[2:length(btime)] -
+        #                     btime[1:(length(btime)-1)])
+        #RET <- sum(diffs*bsc)/max(btime)
+        names(RET) <- "integrated Brier score"
+        attr(RET, "time") <- range(btime)
+
+    # compute Brier score at one single time `btime'
+ 
+    } else {
+        help1 <- as.integer(time <= btime & cens == 1)
+        help2 <- as.integer(time > btime)
+        cs <- predict(hatcdist, times=btime, type = "surv")
+        ### cs <- getsurv(hatcdist, btime)
+        if (cs == 0) cs <- Inf
+        RET <-  mean((0 - survs)^2*help1*(1/csurv) +
+                     (1-survs)^2*help2*(1/cs))
+        names(RET) <- "Brier score"
+        attr(RET, "time") <- btime
+    }
+    RET
+}
+
+
+
+get_pred_curv <- function(obj, newdata, evaltimes){
+    neval <- length(evaltimes)
+    ret <- matrix(0,nrow=neval, ncol=nrow(newdata))
+    newdata_id <- unique(newdata$id)
+
+    if(class(obj) == 'survreg'){
+        pct <- 1:999/1000
+        for (j in newdata_id){
+            tmpidx <- newdata$id == j
+            tmpdata <-newdata[tmpidx,]
+            ntmp <- sum(tmpidx)
+            tmpdata$tstop[ntmp] <- max(evaltimes)
+
+            ptime <- predict(obj, newdata=tmpdata, type='quantile',p=pct)
+            tmpsurv <- matrix(0,nrow=neval,ncol=ntmp)
+            if(ntmp==1){
+                fakeobj <- list(surv = 1-pct, time=ptime);class(fakeobj) <- 'survfit'
+                tmpsurv[,1] <- getsurv(fakeobj, evaltimes)
+                ret[,tmpidx] <- tmpsurv
+            } else {
+                for (z in seq_len(ntmp)){
+                    fakeobj <- list(surv = 1-pct, time=ptime[z,]);class(fakeobj) <- 'survfit'
+                    tmpsurv[,z] <- getsurv(fakeobj, evaltimes)
+                }
+                final_curv <- agg_curv(tmpsurv, evaltimes, tmpdata$tstop, evaltimes)
+                ret[,tmpidx] <- rep(final_curv, ntmp)
+            }
+        }
+    } else if (class(obj) == 'coxph'){
+        # obj is fit with strata
+        # use individual=TRUE to automatically aggregate across pseudo-subjects.
+        for (j in newdata_id){
+            tmpidx <- newdata$id == j
+            tmpdata <- newdata[tmpidx,]
+            ntmp <- sum(tmpidx)
+            tmpdata$tstop[ntmp] <- max(evaltimes)
+
+            if(ntmp==1){ survfitmod <- survfit(obj, newdata = tmpdata,id='class')
+            } else { 
+                survfitmod <- survfit(obj, newdata = tmpdata,individual=TRUE) 
+                survfitmod$time <- survfitmod$time+tmpdata[1,tstart]
+            }
+            final_curv <- getsurv(survfitmod, evaltimes)
+            ret[, tmpidx] <- rep( final_curv, ntmp)
+        }
+    } else if (class(obj)=='coxph.null'){
+        final_curv <- getsurv(survfit(obj),evaltimes)
+        ret <- rep(final_curv, nrow(newdata))
+    }
+    return (ret)
+}
+
+
+agg_curv <- function(surv, time, tstops, evaltimes){
+    ntmp <- length(tstops)
+
+    if (ntmp>1){
+        breaks <- c(-Inf,tstops[-ntmp],Inf)
+        cut_ret <- as.numeric(cut(time, breaks))
+        surv_ret <- c()
+        prevprob <- 1
+        currtimeidx <- 0
+        for(z in seq_len(ntmp)){
+            if(any(cut_ret==z)){
+                surv_ret <- c(surv_ret, surv[cut_ret==z,z]*prevprob)
+                currtimeidx <- max(which(cut_ret==z))
+                if (z < ntmp & currtimeidx < length(time)){
+                    if (surv[currtimeidx+1, z+1] < 1e-4){
+                        prevprob <- 0
+                    } else {prevprob <- prevprob*surv[currtimeidx+1,z]/surv[currtimeidx+1,z+1] }
+                }
+            }
+        }
+        fake_obj <- list(surv=surv_ret, time=time); class(fake_obj) <- 'survfit'
+        return(getsurv(fake_obj,evaltimes))
+    } else {
+        return(surv)
+    }
+}

@@ -16,20 +16,44 @@ g <- ggplot()
 g <- g + geom_point(aes(x=X1,y=X2,color=factor(gg)))
 print(g)
 
+#----------
+# Tree
+pdf('struct_tree.pdf')
+plot(x=NULL,y=NULL,xlim=c(0,1),ylim=c(0,1),xlab="X1",ylab="X2",main=NULL,xaxs="i", yaxs="i")
+abline(v=0.5); abline(h=0.5)
+text(x=0.25,y=0.75,'g=2',cex=2)
+text(x=0.25,y=0.25,'g=1',cex=2)
+text(x=0.75,y=0.25,'g=3',cex=2)
+text(x=0.75,y=0.75,'g=4',cex=2)
+dev.off()
 
 #----------
 # linear
+#W <- matrix(c(0.8,-0.6,0.9,0.5,-0.8,0.6,0.5,0.9),byrow=TRUE,ncol=2) # random sample from sphere
+#pdf('struct_linear.pdf')
+#plot(x=NULL,y=NULL,xlim=c(1,3),ylim=c(1,3),xlab="X1",ylab="X2",main=NULL,xaxs="i", yaxs="i")
+#y <- c(0,2); x <- 1.2/1.6*(y-2)+2; lines(x,y)
+#y <- c(2,4); x <- c(2,3); lines(x,y)
+#x <- c(0,2); y <- -13*(x-2)/3+2; lines(x,y)
+#x <- c(2,5); y <- -(x-2)/11+2; lines(x,y)
+#text(x=1.3,y=2,'g=3',cex=2)
+#text(x=2.2,y=1.4,'g=1',cex=2)
+#text(x=2.6,y=2.2,'g=2',cex=2)
+#text(x=2.1,y=2.6,'g=4',cex=2)
+#dev.off()
+
+
 W <- matrix(c(0.8,-0.6,0.9,0.5,-0.8,0.6,0.5,0.9),byrow=TRUE,ncol=2) # random sample from sphere
 pdf('struct_linear.pdf')
-plot(x=NULL,y=NULL,xlim=c(1,3),ylim=c(1,3),xlab="X1",ylab="X2",main=NULL,xaxs="i", yaxs="i")
-y <- c(0,2); x <- 1.2/1.6*(y-2)+2; lines(x,y)
-y <- c(2,4); x <- c(2,3); lines(x,y)
-x <- c(0,2); y <- -13*(x-2)/3+2; lines(x,y)
-x <- c(2,5); y <- -(x-2)/11+2; lines(x,y)
-text(x=1.3,y=2,'g=3',cex=2)
-text(x=2.2,y=1.4,'g=1',cex=2)
-text(x=2.6,y=2.2,'g=2',cex=2)
-text(x=2.1,y=2.6,'g=4',cex=2)
+plot(x=NULL,y=NULL,xlim=c(0,1),ylim=c(0,1),xlab="X1",ylab="X2",main=NULL,xaxs="i", yaxs="i")
+y <- c(0,2); x <- 1.2/1.6*(y-2)+2; lines((x-1)/2,(y-1)/2)
+y <- c(2,4); x <- c(2,3); lines((x-1)/2,(y-1)/2)
+x <- c(0,2); y <- -13*(x-2)/3+2; lines((x-1)/2,(y-1)/2)
+x <- c(2,5); y <- -(x-2)/11+2; lines((x-1)/2,(y-1)/2)
+text(x=0.2,y=0.5,'g=3',cex=2)
+text(x=0.6,y=0.2,'g=1',cex=2)
+text(x=0.8,y=0.6,'g=2',cex=2)
+text(x=0.55,y=0.8,'g=4',cex=2)
 dev.off()
 
 #----------
@@ -66,6 +90,8 @@ text(x=0.375,y=0.5,'g=4',cex=2)
 text(x=0.625,y=0.5,'g=2',cex=2)
 text(x=0.875,y=0.5,'g=3',cex=2)
 dev.off()
+
+
 
 
 #----------

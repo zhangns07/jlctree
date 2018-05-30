@@ -50,35 +50,109 @@ if (FLAGS$alg == 'jlcmm'){
     }
 }
 
-#FLAGS$Nsub=500;FLAGS$continuous=TRUE;
-PARMS <- get_parms(FLAGS$dist); parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D; 
+Nsub <- FLAGS$Nsub
+censor_rate <- FLAGS$censor
+dist <- FLAGS$dist
+PARMS <- get_parms(dist); parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D; 
+
+sd_ranef <- 0.2
+sd_e <- 0.1
 Nsim <- FLAGS$maxsim-FLAGS$minsim+1
+beta_y <- rep(0,5)
 
-opt2 <- FLAGS; opt2$help <- NULL; opt2$outdir<- NULL; 
-RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
-
-opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL
-Rbasefilename <- paste0(paste0(names(opt3),"_",opt3),collapse="_")
-
-if(is.null(FLAGS$continuous)){FLAGS$continuous <- FALSE}
 if (FLAGS$alg == 'jlcmm'){
-    RET <- matrix(0,ncol=8,nrow=Nsim)
-    colnames(RET) <- c('sim','runtime','bestng','B2','B3','B4','B5','B6')
+    RET <- matrix(0,ncol=12,nrow=Nsim)
+    colnames(RET) <- c('sim','runtime','bestng','B2','B3','B4','B5','B6','ISE','MSE_b','MSE_y','purity')
 } else if (FLAGS$alg == 'jlctree'){
-    if (FLAGS$stop_thre==-1){ RET <- matrix(0,ncol=5,nrow=Nsim)
-    } else { RET <- matrix(0,ncol=5,nrow=Nsim*5) }
-    colnames(RET) <- c('sim','k','runtime','nsplit','nnode')
+    if (FLAGS$stop_thre==-1){ RET <- matrix(0,ncol=9,nrow=Nsim)
+    } else { RET <- matrix(0,ncol=9,nrow=Nsim*5) }
+    colnames(RET) <- c('sim','k','runtime','nsplit','nnode','ISE','MSE_b','MSE_y','purity')
 }
 RET_iter <- 1
 
 for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
 
-    DATA <- gen_data(FLAGS, PARMS,seed=sim)
-    data <- DATA$data; pseudo_g <- DATA$pseudo_g
+    # X1 - X5
+    if (FLAGS$continuous){
+        if(FLAGS$struct == 'linear'){
+            X1 <- round(runif(2*Nsub, min=1,max=3),2)
+            X2 <- round(runif(2*Nsub, min=1,max=3),2)
+        } else {
+            X1 <- round(runif(2*Nsub),2)
+            X2 <- round(runif(2*Nsub),2)
+        }
+    } else {
+        if(FLAGS$struct == 'linear'){
+            X1 <- sample(c(1:3),2*Nsub,replace=TRUE)
+            X2 <- sample(c(1:3),2*Nsub,replace=TRUE)
+        } else if (FLAGS$struct == 'nonlinear'){
+            stop("Nonlinear must have continuous X1 and X2.")
+        } else {
+            X1 <- as.numeric(runif(2*Nsub)>0.5)
+            X2 <- as.numeric(runif(2*Nsub)>0.5)
+        }
+    }
+    X3 <- as.numeric(runif(2*Nsub)>0.5)
+    X4 <- round(runif(2*Nsub),1)
+    X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
+    X <- cbind(X1,X2,X3,X4,X5)
 
-    DATA_TEST <- gen_data(FLAGS,PARMS,seed=sim+623)
-    data_test <- DATA_TEST$data; pseudo_g_test <- DATA_TEST$pseudo_g
+    g <- get_latent_class(X1,X2,FLAGS$struct, FLAGS$member, seed=sim)
+
+    if(FLAGS$dist == 'lognormal'){ 
+        ebx <- rep(1 , 2*Nsub)
+        tmp_parms <- parms[g,]
+    } else{
+        ebx <- exp(rowSums(slopes[g,] * cbind(X3,X4,X5))) 
+        tmp_parms <- parms
+    }
+
+    time_T <- gen_model3_survival(ebx, dist, tmp_parms)
+    time_L <- runif(2*Nsub, min=0, max=1)
+
+    time_tokeep <- time_L < time_T
+    time_L <- time_L[time_tokeep][1:Nsub]
+    time_T <- time_T[time_tokeep][1:Nsub]
+    X <- X[time_tokeep,][1:Nsub,]
+    g <- g[time_tokeep][1:Nsub]
+    ebx <- ebx[time_tokeep][1:Nsub]
+
+    if (censor_rate==0){ 
+        time_C <- Inf
+    } else{
+        time_C <- time_L + rexp(Nsub,lam_D[[censor_rate]][g])
+    }
+
+    delta <- as.numeric(time_C >= time_T)
+    time_Y <- pmin(time_T, time_C)
+
+    num_measure <-  1+rpois(Nsub,lambda=1)
+    LTRC_data <- ldply(array(seq_len(Nsub)),function(i){
+                           tmp_time <- c(time_L[i],sort(runif(num_measure[i], min=time_L[i],max=time_Y[i])),time_Y[i])
+                           num_i <- num_measure[i]+1
+                           if (FLAGS$alg == 'jlctree'){
+                               tmp_time_L <- tmp_time[1:num_i]
+                               tmp_time_Y <- tmp_time[-1]
+                               tmp_delta <- c(rep(0,num_i-1),delta[i])
+                           } else if (FLAGS$alg == 'jlcmm'){
+                               tmp_time_L <- rep(time_L[i],num_i)
+                               tmp_time_Y <- rep(time_Y[i],num_i)
+                               tmp_delta <- rep(delta[i],num_i)
+                           }
+
+                           ret <- cbind(ID=i, X1=rep(X[i,1],num_i),
+                                        X2=rep(X[i,2],num_i), X3=rep(X[i,3],num_i),
+                                        X4=rep(X[i,4],num_i), X5=rep(X[i,5],num_i),
+                                        time_L=tmp_time_L, time_Y=tmp_time_Y, delta=tmp_delta)})
+
+
+    ranef <- rnorm(Nsub, sd=sd_ranef)
+    ranefs <- ranef[LTRC_data$ID]
+    fixef <- c(0,1,1,2)
+    pseudo_g <- g[LTRC_data$ID]
+    y <- fixef[pseudo_g] + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
+    data <- cbind(LTRC_data,y)
 
     if (FLAGS$alg == 'jlcmm'){
         m1 <- Jointlcmm(fixed=y~X1+X2+X3+X4+X5,
@@ -86,7 +160,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                         survival = Surv(time_L,time_Y,delta)~X3+X4+X5,
                         hazard="Weibull",hazardtype="Specific",ng=1,data=data)
 
-        if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5 }
+        if(FLAGS$inter){ classmb <- ~X1*X2+X3+X4+X5 } else { classmb <- ~X1+X2+X3+X4+X5}
 
         BICs <- rep(Inf, 6)
         initB <- rep(1,6) #1:B=m1; 2:B=NULL; 3:B=random(m1); 4:none worked
@@ -128,15 +202,14 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
         best_ng <- which.min(BICs)
         mod <- get(paste0('m',best_ng))
         runtime <- round(difftime(tok,tik,units='secs'),4)
-        RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6])
-        #eval_lcmm_pred_inout(data,data_test, FLAGS$dist, PARMS$slopes, PARMS$parms, mod, pseudo_g, pseudo_g_test)
-
+        RET[RET_iter,] <- c(sim, runtime, best_ng, initB[2:6], c(0,0,0,0))
+                            #eval_lcmm_pred(data,dist,slopes,parms,mod,g=pseudo_g,inter=FLAGS$inter))
         RET_iter <- RET_iter+1
     } else if (FLAGS$alg == 'jlctree'){
 
         if (FLAGS$stop_thre==-1){
-            RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, nnode=1)
-            #eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, rep(1,nrow(data)), rep(1,nrow(data_test)), pseudo_g, pseudo_g_test)
+            RET[RET_iter,] <- c(sim,k=-Inf, runtime=0, nsplit=-1, nnode=1,c(0,0,0,0))
+                                #eval_tree_pred(data,dist, slopes, parms, rep(1,nrow(data)),g=pseudo_g))
             RET_iter <- RET_iter+1
         } else {
             survs <- survs_v3
@@ -162,8 +235,8 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
 
             nsplit <- max(cond_ind_tree$cptable[,'nsplit'])
             nnode <- sum(grepl('leaf',cond_ind_tree$frame$var))
-            RET[RET_iter,] <- c(sim,k=-Inf, runtime, nsplit, nnode)
-            #idx <- cond_ind_tree$where; idx_test <- predict_class(cond_ind_tree, data_test); eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, idx, idx_test, pseudo_g, pseudo_g_test)
+            RET[RET_iter,] <- c(sim,k=-Inf, runtime, nsplit, nnode,c(0,0,0,0))
+                                #eval_tree_pred(data,dist, slopes, parms, cond_ind_tree$where,g=pseudo_g))
             RET_iter <- RET_iter+1
 
             for (kse in c(0:3)){
@@ -177,11 +250,9 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                     RET[RET_iter,] <- RET[RET_iter-1,]
                     RET[RET_iter,2] <- kse
                 } else {
-                    RET[RET_iter,] <- c(sim,k=kse, runtime, nsplit_prune, nnode_prune)
+                    RET[RET_iter,] <- c(sim,k=kse, runtime, nsplit_prune, nnode_prune,c(0,0,0,0))
+                                        #eval_tree_pred(data,dist, slopes, parms, cond_ind_tree_prune$where,g=pseudo_g))
                 }
-
-                #idx <- cond_ind_tree_prune$where; idx_test <- predict_class(cond_ind_tree_prune, data_test); eval_tree_pred_inout(data,data_test,FLAGS$dist, PARMS$slopes, PARMS$parms, idx, idx_test, pseudo_g, pseudo_g_test)
-
                 RET_iter <- RET_iter+1
 
             }
@@ -195,3 +266,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     filename <- paste0(FLAGS$outdir,'/simret_main/',RETbasefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
+
+
+
+
