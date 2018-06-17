@@ -231,7 +231,6 @@ get_split_utility <- function
     }
 }
 
-
 jlctree <- function
 (survival, ## Surv(start,end,event)~ cox ph vars
  classmb, ## Tree split vars
@@ -253,7 +252,7 @@ jlctree <- function
     if(is.null(parms$stable)){parms$stable=TRUE}
     if(is.null(parms$min_nevent)){parms$min_nevent=5}
 
-    surv_vars <- labels(terms(survival))
+    surv_vars <- labels(terms(survival)); if(length(surv_vars)==0){surv_vars='1'}
     surv_char <- deparse(survival[[2]]) #setdiff(all.vars(survival),surv_vars)
     y_var <- deparse(fixed[[2]]) #all.vars(fixed)[1]
 
@@ -274,20 +273,34 @@ jlctree <- function
 
     # ---------- Fit lmm model.
     data$node <- as.factor(tree$where)
-    lmer_formula <- as.formula(paste0(Reduce(paste0, deparse(fixed)), '+', 
-                                      '(', paste0(labels(terms(random)),collapse='+') ,'|node)+',
-                                      paste0('(1|',subject,')')))
+    rand_vars <- labels(terms(random)); if (length(rand_vars)==0){rand_vars='1'}
+    if(length(unique(tree$where))==1){
+        lmer_formula <- as.formula(paste0(Reduce(paste0, deparse(fixed)), '+', 
+                                          #'(', paste0(rand_vars,collapse='+') ,'|node)+',
+                                          paste0('(1|',subject,')')))
+    } else {
+        lmer_formula <- as.formula(paste0(Reduce(paste0, deparse(fixed)), '+', 
+                                          '(', paste0(rand_vars,collapse='+') ,'|node)+',
+                                          paste0('(1|',subject,')')))
+    }
     lmm_model <- lmer(lmer_formula,data=data)
 
     # ---------- Fit three versions of cox model:
     # diffh: different baseline hazards, diffs: different cox slopes.
-    coxph_formula_diffh_diffs <- as.formula(paste0(deparse(survival[[2]]),'~',
-                                        paste0(paste0(surv_vars,'*node'),collapse='+'),'+', 'strata(node)'))
-    coxph_formula_diffh <- as.formula(paste0(deparse(survival[[2]]),'~',
-                                        paste0(paste0(surv_vars),collapse='+'),'+', 'strata(node)'))
-    coxph_formula_diffs <- as.formula(paste0(deparse(survival[[2]]),'~',
-                                        paste0(paste0(surv_vars,'*node'),collapse='+')))
 
+    if(length(unique(tree$where))==1){
+        coxph_formula_diffh_diffs <- as.formula(paste0(deparse(survival[[2]]),'~',
+                                                       paste0(surv_vars,collapse='+')))
+        coxph_formula_diffh <- coxph_formula_diffh_diffs 
+        coxph_formula_diffs <- coxph_formula_diffh_diffs 
+    } else {
+        coxph_formula_diffh_diffs <- as.formula(paste0(deparse(survival[[2]]),'~',
+                                                       paste0(paste0(surv_vars,'*node'),collapse='+'),'+', 'strata(node)'))
+        coxph_formula_diffh <- as.formula(paste0(deparse(survival[[2]]),'~',
+                                                 paste0(paste0(surv_vars),collapse='+'),'+', 'strata(node)'))
+        coxph_formula_diffs <- as.formula(paste0(deparse(survival[[2]]),'~',
+                                                 paste0(paste0(surv_vars,'*node'),collapse='+')))
+    }
     coxph_model_diffh_diffs <- coxph(coxph_formula_diffh_diffs, data, model=TRUE)
     coxph_model_diffh <- coxph(coxph_formula_diffh, data, model=TRUE)
     coxph_model_diffs <- coxph(coxph_formula_diffs, data, model=TRUE)

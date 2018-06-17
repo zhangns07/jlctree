@@ -5,425 +5,6 @@ library(ipred)
 library(prodlim)
 
 
-survi<- function
-#  Initialize
-(y, offset, parms, wt) {
-    if (!missing(offset) && length(offset) > 0)
-        warning("offset argument ignored")
-
-    sfun <- function(yval, dev, wt, ylevel, digits ) {
-        paste("  mean=", format(signif(yval, digits)),
-              ", MSE=" , format(signif(dev/wt, digits)),
-              sep = '') }
-    environment(sfun) <- .GlobalEnv
-    #list(y = data.frame(y), parms = parms, numresp = 1, numy = ncol(y), summary = sfun)
-    list(y = y, parms = parms, numresp = 1, numy = ncol(y), summary = sfun)
-}
-
-
-surve <- function
-(y, wt, parms){
-
-    if (is.null(parms$stable)){ parms$stable <- FALSE }
-    y = data.frame(y)
-    if (parms$LTRC){
-        colnames(y)[1:4] <- c('start','end','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <-  formulay2 <- Surv(start, end, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(start, end, event) ~ . - biomarker
-            formulay2 <- Surv(start, end, event) ~ .
-        }
-    } else {
-        colnames(y)[1:3] <- c('time','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <- formulay2 <- Surv(time, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(time, event) ~ . - biomarker
-            formulay2 <- Surv(time, event) ~ .
-        }
-    }
-
-    node_val <- get_node_val(formulay1, formulay2, y, test_stat=parms$test_stat, stable=parms$stable)
-    list(label = node_val, deviance = node_val)
-    # deviance: it should be closely related to the split criteria.
-    # label: does not matter, but we use node_val here.
-}
-
-
-survs_v1<- function
-# Split
-# version 1: if using log likelihood, the root level is treating potential two children 
-# groups as same, thus same coefficients.
-(y, wt, x, parms, continuous)
-{
-    y = data.frame(y)
-    if (parms$LTRC){
-        colnames(y)[1:4] <- c('start','end','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <-  formulay2 <- Surv(start, end, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(start, end, event) ~ . - biomarker
-            formulay2 <- Surv(start, end, event) ~ .
-        }
-    } else {
-        colnames(y)[1:3] <- c('time','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <- formulay2 <- Surv(time, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(time, event) ~ . - biomarker
-            formulay2 <- Surv(time, event) ~ .
-        }
-    }
-
-    root_val <- get_node_val(formulay1, formulay2, y, test_stat= parms$test_stat)
-
-    if (continuous) {
-        # continuous x variable: do all the logistic regressions
-        n <- nrow(y)
-        goodness <- double(n-1)
-        direction <- goodness
-        for (i in 1:(n-1)) {
-            if (x[i] != x[i+1]) {
-                result <- tryCatch({
-                    left_val <- get_node_val(formulay1, formulay2, y[1:i,], test_stat= parms$test_stat)
-                    right_val <- get_node_val(formulay1, formulay2, y[(i+1):n,], test_stat= parms$test_stat)
-                    get_split_utility(root_val, left_val, right_val, parms$test_stat)
-                }, error = function(e){ c(0, sign(1))})#, warning = function(w){c(0,sign(0))})
-                goodness[i] = result[1]; direction[i] = result[2]
-
-            }
-        }
-    } else {
-        # Categorical X variable
-        n <- nrow(y)
-        ux <- sort(unique(x))
-        nx <- length(ux)
-        goodness <- double(nx-1)
-        direction <- goodness
-
-        for (i in 1:(nx-1)){
-            #next_start <- min(which(x > ux[i]))
-            next_start <- min(which(x == ux[i+1]))
-            result <- tryCatch({
-                left_val <- get_node_val(formulay1, formulay2, y[1:(next_start-1),], test_stat= parms$test_stat)
-                right_val <- get_node_val(formulay1, formulay2, y[next_start:n,], test_stat= parms$test_stat)
-                get_split_utility(root_val, left_val, right_val, parms$test_stat)
-            }, error = function(e){ c(0, sign(0))})#, warning = function(w){c(0,sign(0))})
-            goodness[i] = result[1]
-        }
-        names(goodness) <- ux[1:(nx-1)]
-        direction <- ux
-    }
-
-    list(goodness=goodness, direction=direction)
-}
-
-survs_v2<- function
-# Split
-# version 2: if using log likelihood, the root level is using 
-# coefficients for different groups (thus, changes after every split)
-(y, wt, x, parms, continuous)
-{
-    y = data.frame(y)
-    if (parms$LTRC){
-        colnames(y)[1:4] <- c('start','end','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <-  formulay2 <- Surv(start, end, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(start, end, event) ~ . - biomarker
-            formulay2 <- Surv(start, end, event) ~ .
-        }
-    } else {
-        colnames(y)[1:3] <- c('time','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <- formulay2 <- Surv(time, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(time, event) ~ . - biomarker
-            formulay2 <- Surv(time, event) ~ .
-        }
-    }
-
-
-    if (parms$test_stat=='rsq'){
-        root_val <- get_node_val(formulay1, formulay2, y, test_stat= parms$test_stat)
-    } 
-
-
-    if (continuous) {
-        # continuous x variable: do all the logistic regressions
-        n <- nrow(y)
-        goodness <- double(n-1)
-        direction <- goodness
-
-        for (i in 1:(n-1)) {
-            if (x[i] != x[i+1]) {
-                result <- tryCatch({
-                    left_val <- get_node_val(formulay1, formulay2, y[1:i,], test_stat= parms$test_stat)
-                    right_val <- get_node_val(formulay1, formulay2, y[(i+1):n,], test_stat= parms$test_stat)
-
-                    if (parms$test_stat=='lrt'){
-                        if (parms$LTRC){
-                            addcols <- y[,-c(1:4)] * c(rep(1,i), rep(0,n-i))
-                        } else {
-                            addcols <- y[,-c(1:3)] * c(rep(1,i), rep(0,n-i))
-                        }
-                        colnames(addcols) <- paste0(colnames(addcols),'_dummy')
-                        y2 <- cbind(y, addcols)
-                        root_val <- get_node_val(formulay1, formulay2, y2, test_stat= parms$test_stat)
-                    }
-                    get_split_utility(root_val, left_val, right_val, parms$test_stat)
-                }, error = function(e){ c(0, sign(0))})#, warning = function(w){c(0,sign(0))})
-
-                goodness[i] = result[1]; direction[i] = result[2]
-            }
-        }
-    } else {
-        # Categorical X variable
-        n <- nrow(y)
-        ux <- sort(unique(x))
-        nx <- length(ux)
-        goodness <- double(nx-1)
-        direction <- goodness
-
-        for (i in 1:(nx-1)){
-            #next_start <- min(which(x > ux[i]))
-            next_start <- min(which(x == ux[i+1]))
-            result <- tryCatch({
-                left_val <- get_node_val(formulay1, formulay2, y[1:(next_start-1),], test_stat= parms$test_stat)
-                right_val <- get_node_val(formulay1, formulay2, y[next_start:n,], test_stat= parms$test_stat)
-                if (parms$test_stat=='lrt'){
-                    if (parms$LTRC){
-                        addcols <- y[,-c(1:4)] * c(rep(1,next_start-1), rep(0,n-next_start+1))
-                    } else {
-                        addcols <- y[,-c(1:3)] * c(rep(1,next_start-1), rep(0,n-next_start+1))
-                    }
-                    colnames(addcols) <- paste0(colnames(addcols),'_dummy')
-                    y2 <- cbind(y2, addcols)
-                    root_val <- get_node_val(formulay1, formulay2, y2, test_stat= parms$test_stat)
-
-                }
-                get_split_utility(root_val, left_val, right_val, parms$test_stat)
-            }, error = function(e){ c(0, sign(0))})#, warning = function(w){c(0,sign(0))})
-            goodness[i] = result[1]
-        }
-
-        names(goodness) <- ux[1:(nx-1)]
-        direction <- ux
- 
-    }
-    list(goodness=goodness, direction=direction)
-}
-
-survs_v3<- function
-# Split
-# version 1: if using log likelihood, the root level is treating potential two children 
-# groups as same, thus same coefficients.
-(y, wt, x, parms, continuous)
-{
-    y = data.frame(y)
-    if (parms$LTRC){
-        colnames(y)[1:4] <- c('start','end','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <-  formulay2 <- Surv(start, end, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(start, end, event) ~ . - biomarker
-            formulay2 <- Surv(start, end, event) ~ .
-        }
-    } else {
-        colnames(y)[1:3] <- c('time','event','biomarker')
-        if (parms$test_stat=='rsq'){
-            formulay1 <- formulay2 <- Surv(time, event) ~ biomarker
-        } else {
-            formulay1 <- Surv(time, event) ~ . - biomarker
-            formulay2 <- Surv(time, event) ~ .
-        }
-    }
-
-    if (is.null(parms$min_nevent)){ parms$min_nevent <- 1 }
-    if (is.null(parms$stop_thre)){ parms$stop_thre <- 1 } # expected Chi_1
-    if (is.null(parms$stable)){ parms$stable <- FALSE }
-
-    nevents <- sum(y[,'event'])
-    root_val <- get_node_val(formulay1, formulay2, y, test_stat=parms$test_stat, stable=parms$stable)
-
-    if (nevents <= parms$min_nevent*2 | root_val < parms$stop_thre){
-        if (continuous){
-            goodness <- rep(0,nrow(y)-1); direction<-goodness;
-        } else{
-            ux <- sort(unique(x))
-            goodness <- rep(0,length(ux)-1); direction <- ux
-        }
-    } else {
-        if (continuous) {
-            # continuous x variable: do all the logistic regressions
-            n <- nrow(y)
-            goodness <- double(n-1)
-            direction <- goodness
-            for (i in 1:(n-1)) {
-                if (x[i] != x[i+1]) {
-                    nevents_l <- sum(y$event[1:i])
-                    nevents_r <- sum(y$event[(i+1):n])
-                    if (nevents_l <= parms$min_nevent | nevents_r <= parms$min_nevent ){
-                        result <- c(0,0)
-                    } else{
-                        result <- tryCatch({
-                            left_val <- get_node_val(formulay1, formulay2, y[1:i,], test_stat= parms$test_stat, stable=parms$stable)
-                            right_val <- get_node_val(formulay1, formulay2, y[(i+1):n,], test_stat= parms$test_stat, stable=parms$stable)
-                            get_split_utility(root_val, left_val, right_val, parms$test_stat)
-                        }, error = function(e){ c(0, sign(1))})#, warning = function(w){c(0,sign(0))})
-                    }
-                    goodness[i] = result[1]; direction[i] = result[2]
-                }
-            }
-            goodness <- pmax(0,goodness)
-        } else {
-            # Categorical X variable
-            n <- nrow(y)
-            ux <- sort(unique(x))
-            nx <- length(ux)
-            goodness <- double(nx-1)
-            direction <- goodness
-
-            for (i in 1:(nx-1)){
-                #next_start <- min(which(x > ux[i]))
-                next_start <- min(which(x == ux[i+1]))
-                nevents_l <- sum(y$event[1:(next_start-1)])
-                nevents_r <- sum(y$event[next_start:n])
-                if (nevents_l <= parms$min_nevent | nevents_r <= parms$min_nevent ){
-                    result <- c(0,0)
-                } else{
-                    result <- tryCatch({
-                        left_val <- get_node_val(formulay1, formulay2, y[1:(next_start-1),], test_stat= parms$test_stat, stable=parms$stable)
-                        right_val <- get_node_val(formulay1, formulay2, y[next_start:n,], test_stat= parms$test_stat, stable=parms$stable)
-                        get_split_utility(root_val, left_val, right_val, parms$test_stat)
-                    }, error = function(e){ c(0, sign(1))})#, warning = function(w){c(0,sign(0))})
-                }
-                goodness[i] = result[1]
-            }
-            names(goodness) <- ux[1:(nx-1)]
-            goodness <- pmax(0,goodness)
-            direction <- ux
-        }
-    }
-    list(goodness=goodness, direction=direction)
-}
-
-
-get_node_val<- function
-(f1,f2,data, 
- test_stat=c('rsq','lrt','wald')[2],
- stable=FALSE){
-    if (test_stat == 'rsq'){
-        ret <- get_rsquare(f1, data)
-    } else if (test_stat=='lrt'){
-        ret <- get_loglik_diff(f1, f2, data, stable)
-    } else if (test_stat=='wald'){
-        ret <- get_wald(f2, data)
-    }
-    return (ret)
-}
-
-
-get_wald <- function(f, data){
-    ret <- tryCatch({
-        bo<-0
-        while(bo!=10){
-            coxml <- coxph(f,data)
-            if (is.na(coxml$coefficients[1])){
-                bo <- bo+1
-                data <- data[sample(c(1:nrow(data)),replace = TRUE),]
-            } else  break 
-        }
-        (coxml$coefficients[1])^2/ coxml$var[1,1]
-    }, error = function(e){Inf})
-}
-
-get_rsquare <- function(f, data){
-    coxml <- coxph(f, data)
-    logtest <- -2 * (coxml$loglik[1] - coxml$loglik[2])
-    rsq <-  1-exp(-logtest/coxml$nevent)
-    return(rsq)
-}
-
-
-get_loglik_diff <- function(f1, f2, data, stable=FALSE){
-    ret <- tryCatch({
-        bo<-0
-        while(bo!=10){
-            coxml1 = coxph(f1, data)
-            if (coxml1$loglik[2] < coxml1$loglik[1]){
-                bo <- bo+1
-                data <- data[sample(c(1:nrow(data)),replace = TRUE),]
-            } else  break 
-        }
-
-        bo<-0
-        while(bo!=10){
-            coxml2 = coxph(f2, data)
-            if (coxml2$loglik[2] < coxml2$loglik[1]){
-                bo <- bo+1
-                data <- data[sample(c(1:nrow(data)),replace = TRUE),]
-            } else  break 
-        }
-
-        loglik_diff <- 2*(coxml2$loglik[2] - coxml1$loglik[2] )
-
-        if(stable){
-            if (max(c(diag(coxml1$var), diag(coxml2$var))) > 1e5){
-                loglik_diff <- Inf
-            }
-        }
-
-        max(0,loglik_diff)
-    }, error = function(e){Inf}) # Inf, thus the parent node will not split to this childnode
-
-    return(ret)
-}
-
-get_split_utility <- function
-(var_root, var_left, var_right, 
- test_stat=c('rsq','lrt','wald')[1]){
-    if (test_stat=='rsq'){
-        c(var_root- (var_left+var_right)/2,
-          sign(var_left- var_right))
-    } else {
-        c( 
-          var_root - (var_left+var_right),
-          #var_root - (var_left+var_right)/2,
-          sign(var_left- var_right))
-    }
-}
-
-
-
-independence_score <- function(gidx, newdata, LTRC){
-    group_uq <- sort(unique(gidx))
-    ind_score <- matrix(0, nrow=length(group_uq),ncol=2)
-    newdata = data.frame(newdata)
-    if (LTRC){
-        colnames(newdata)[1:4] <- c('start','end','event','biomarker')
-        formulay1 <- Surv(start, end, event) ~ . - biomarker
-        formulay2 <- Surv(start, end, event) ~ .
-    } else{
-        colnames(newdata)[1:3] <- c('time','event','biomarker')
-        formulay1 <- Surv(time, event) ~ . - biomarker
-        formulay2 <- Surv(time, event) ~ .
-    }
-
-    for (i in seq_along(group_uq)){
-        g <- group_uq[i]
-        data_sub <- newdata[gidx==g,]
-        coxml1 <- coxph(formulay1, data_sub)
-        coxml2 <- coxph(formulay2, data_sub)
-        ind_score[i,1] <- nrow(data_sub)
-        ind_score[i,2] <- coxml2$loglik[2] - coxml1$loglik[2] 
-    }
-
-    return(ind_score)
-}
-
-
 eval_tree_pred<- function
 (data,dist, slopes, parms, node_idx, g=NULL){
     Nsub_pseudo  <- nrow(data)
@@ -1151,13 +732,27 @@ gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
 eval_tree_pred_inout_timevar <- function
 (data, data_test, dist, slopes, parms, 
  idx, idx_test, 
- g, g_test){
+ g, g_test,
+ firstobs=FALSE){
 
     Nobs <- nrow(data); Nobs_test <- nrow(data_test)
-    ebx <- exp(rowSums(slopes[g,] * data[,c('X3','X4','X5')]))
-    ebx_test <- exp(rowSums(slopes[g_test,] * data_test[,c('X3','X4','X5')]))
+    #ebx <- exp(rowSums(slopes[g,] * data[,c('X3','X4','X5')]))
+    #ebx_test <- exp(rowSums(slopes[g_test,] * data_test[,c('X3','X4','X5')]))
 
     uniqd <- unique(idx)
+
+    if(firstobs){ # only use first observation in fitting.
+        data_tmp <- data.table(data)
+        data_tmp <- data_tmp[,list(X1=X1[1],X2=X2[1],X3=X3[1],X4=X4[1],X5=X5[1],g=g[1],time_L,time_Y,delta,y),by =ID]
+        data_touse <- data_tmp
+
+        data_tmp <- data.table(data_test)
+        data_tmp <- data_tmp[,list(X1=X1[1],X2=X2[1],X3=X3[1],X4=X4[1],X5=X5[1],g=g[1],time_L,time_Y,delta,y),by =ID]
+        data_test_touse <- data_tmp
+    } else {
+        data_touse <- data
+        data_test_touse <- data_test
+    }
 
     # ---------- Survival Prediction 
     # get true survival prob
@@ -1169,8 +764,8 @@ eval_tree_pred_inout_timevar <- function
 
     for (i in uniqd){
         # subsets
-        sid <- idx == i; sdata <- data[sid,]; sg <- g[sid]
-        sid_test <- idx_test==i; sdata_test <- data_test[sid_test,]; sg_test <- g_test[sid_test]
+        sid <- idx == i; sdata <- data_touse[sid,]; sg <- g[sid]
+        sid_test <- idx_test==i; sdata_test <- data_test_touse[sid_test,]; sg_test <- g_test[sid_test]
 
         KM <- FALSE; err <-0
         while(err!=10){
@@ -1446,151 +1041,6 @@ eval_lcmm_pred_inout_timevar <- function
 
 
 
-getsurv <- function (obj, times)
-{
-    if (!inherits(obj, "survfit"))
-        stop("obj is not of class survfit")
-    class(obj) <- NULL
-    lt <- length(times)
-    nsurv <- times
-    if (length(times) == length(obj$time)) {
-        if (all(times == obj$time))
-            return(obj$surv)
-    }
-    inside <- times %in% obj$time
-    for (i in (1:lt)) {
-        if (inside[i])
-            nsurv[i] <- obj$surv[obj$time == times[i]]
-        else if (max(obj$time) < times[i])
-            nsurv[i] <- 0
-        else {
-            less <- obj$time[obj$time < times[i]]
-            if (length(less) == 0)
-                nsurv[i] <- 1
-            else nsurv[i] <- obj$surv[obj$time == max(less)]
-        }
-    }
-    nsurv
-}
-
-
-sbrier <- function(obj, pred, btime = range(obj[,1]))
-{
-    if(!inherits(obj, "Surv"))
-        stop("obj is not of class Surv")
-
-    # check for right censoring
-
-    # <FIXME>
-    class(obj) <- NULL
-    # </FIXME>
-    if (attr(obj, "type") != "right")
-        stop("only right-censoring allowed")
-    N <- nrow(obj)
-
-    # get the times and censoring of the data, order them with resp. to time
-
-    time <- obj[,1]
-    ot <- order(time)
-    cens <- obj[ot,2]
-    time <- time[ot]
-
-    # get the times to compute the (integrated) Brier score over
-
-    if (is.null(btime)) stop("btime not given")
-    if (length(btime) < 1) stop("btime not given")
-
-    if (length(btime) == 2) {
-        if (btime[1] < min(time)) warning("btime[1] is smaller than min(time)")
-        if (btime[2] > max(time)) warning("btime[2] is larger than max(time)")
-        btime <- time[time >= btime[1] & time <=
-                                          btime[2]]
-    }
-
-    ptype <- class(pred)
-    # <begin> S3 workaround
-    if (is.null(ptype)) {
-      if (is.vector(pred)) ptype <- "vector"
-      if (is.list(pred)) ptype <- "list"
-    }
-    # <end>
-    if (ptype == "numeric" && is.vector(pred)) ptype <- "vector"
-
-    survs <- NULL
-    switch(ptype, survfit = {
-        survs <- getsurv(pred, btime)
-        survs <- matrix(rep(survs, N), nrow=length(btime))
-    }, list = {
-        if (!inherits(pred[[1]], "survfit")) stop("pred is not a list of survfit objects") 
-        if (length(pred) != N) stop("pred must be of length(time)")
-        pred <- pred[ot]
-        survs <-  matrix(unlist(lapply(pred, getsurv, times = btime)),
-                                nrow=length(btime), ncol=N)
-    }, vector = {
-        if (length(pred) != N) stop("pred must be of length(time)")
-        if (length(btime) != 1) stop("cannot compute integrated Brier score with pred")
-        survs <- pred[ot]
-    }, matrix = {
-        # <FIXME>
-        if (all(dim(pred) == c(length(btime), N)))
-            survs <- pred[,ot]
-        else
-            stop("wrong dimensions of pred")
-        # </FIXME>
-    })
-    if (is.null(survs)) stop("unknown type of pred")
-
-    # reverse Kaplan-Meier: estimate censoring distribution
-
-    ### deal with ties
-    hatcdist <- prodlim(Surv(time, cens) ~ 1,reverse = TRUE)
-    # hatcdist <- survfit(Surv(time, 1 - cens) ~ 1)
-    # csurv <- getsurv(hatcdist, time)
-    # csurv[csurv == 0] <- Inf
-
-    bsc <- rep(0, length(btime))
-
-    # compute Lebesque-integrated Brier score
-
-    if (length(btime) > 1) {
-        csurv <- predict(hatcdist, times = btime, type = "surv")
-        #csurv <- predict(hatcdist, times = time, type = "surv")
-        csurv[csurv == 0] <- Inf
-
-        for (j in 1:length(btime)) {
-            help1 <- as.integer(time <= btime[j] & cens == 1)
-            help2 <- as.integer(time > btime[j])
-            bsc[j] <-  mean((0 - survs[j,])^2*help1*(1/csurv[j]) +
-                            (1-survs[j,])^2*help2*(1/csurv[j]))
-        }
-
-        ### apply trapezoid rule
-        idx <- 2:length(btime)
-        RET <- diff(btime) %*% ((bsc[idx - 1] + bsc[idx]) / 2)
-        RET <- RET / diff(range(btime))
-
-        ### previously was
-        #diffs <- c(btime[1], btime[2:length(btime)] -
-        #                     btime[1:(length(btime)-1)])
-        #RET <- sum(diffs*bsc)/max(btime)
-        names(RET) <- "integrated Brier score"
-        attr(RET, "time") <- range(btime)
-
-    # compute Brier score at one single time `btime'
- 
-    } else {
-        help1 <- as.integer(time <= btime & cens == 1)
-        help2 <- as.integer(time > btime)
-        cs <- predict(hatcdist, times=btime, type = "surv")
-        ### cs <- getsurv(hatcdist, btime)
-        if (cs == 0) cs <- Inf
-        RET <-  mean((0 - survs)^2*help1*(1/csurv) +
-                     (1-survs)^2*help2*(1/cs))
-        names(RET) <- "Brier score"
-        attr(RET, "time") <- btime
-    }
-    RET
-}
 
 
 
@@ -1673,3 +1123,155 @@ agg_curv <- function(surv, time, tstops, evaltimes){
         return(surv)
     }
 }
+
+
+eval_tree_pred_inout_jlctree <- function
+(data, data_test, dist, slopes, parms, 
+ idx, idx_test, 
+ g, g_test, jlctree, timevar){
+
+    Nobs <- nrow(data); Nobs_test <- nrow(data_test)
+#    ebx <- exp(rowSums(slopes[g,] * data[,c('X3','X4','X5')]))
+#    ebx_test <- exp(rowSums(slopes[g_test,] * data_test[,c('X3','X4','X5')]))
+
+    # ---------- Coxph Parameter 
+    # get true survival prob
+    pred_parms <- matrix(0,nrow=Nobs,ncol=3)
+    true_parms <- slopes[g,]
+
+    # get pred survival prob
+    pred_parms <- array(0, c(Nobs, ncol(true_parms), 3))
+    pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh_diffs)
+    pred_parms[,,1] <- pred_parms_raw[as.character(idx),]
+    pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh)
+    pred_parms[,,2] <- rep(pred_parms_raw, each = Nobs)
+    pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffs)
+    pred_parms[,,3] <- pred_parms_raw[as.character(idx),]
+    MSE_b <- apply(pred_parms,3,function(x){mean(rowSums((true_parms-x)^2))})
+
+
+    # ---------- Survival Prediction 
+    ISE <- c(get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffh, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
+             get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffh_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
+             get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar))
+
+    ISE_test <- c(get_tree_ISE_jlctree(data_test,idx_test,pseudo_g_test,jlctree$coxph_model_diffh, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
+                  get_tree_ISE_jlctree(data_test,idx_test,pseudo_g_test,jlctree$coxph_model_diffh_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
+                  get_tree_ISE_jlctree(data_test,idx_test,pseudo_g_test,jlctree$coxph_model_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar))
+
+
+    # ---------- Biomarker Prediction
+    predy <- predict(jlctree$lmm_model)
+    data_test$node <- as.factor(idx_test); data_test$ID <- 0
+    predy_test <- predict(jlctree$lmm_model,newdata=data_test,allow.new.levels=TRUE)
+    MSE_y <- mean((predy - data$y)^2); MSE_y_test <- mean((predy_test - data_test$y)^2)
+
+    # purity
+    tmptable <- table(idx, g)
+    purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs
+
+    tmptable <- table(idx_test, g_test)
+    purity_test <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs_test
+
+
+    return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y,purity=purity,
+                   ISE_test=ISE_test, MSE_y_test = MSE_y_test,purity_test=purity_test),4))
+}
+
+
+get_cox_coef <- function(coxph_model){
+    if(is.null(coxph_model$xlevels$node)){
+        pred_parms <- matrix(coef(coxph_model),nrow=1)
+        # when there is one class, for consistency name it '1'
+        rownames(pred_parms) <- '1'
+    } else {
+        all_coef <- coef(coxph_model)
+        nodes <- paste0('node',coxph_model$xlevels$node)
+        all_coef[is.na(all_coef)] <- 0
+
+        baselevel <- nodes[1]
+        base_parms <- all_coef[!grepl('node',names(all_coef))]
+        pred_parms <- base_parms
+        for (d in c(2:length(nodes))){
+            tmp_parms <- all_coef[grepl(nodes[d],names(all_coef))]
+            tmp_parms <- base_parms + tmp_parms[-1]+tmp_parms[1]
+            pred_parms <- rbind(pred_parms, tmp_parms)
+        }
+        rownames(pred_parms) <- coxph_model$xlevels$node
+    }
+    return (pred_parms)
+}
+
+
+
+get_tree_ISE_jlctree <- function
+(data, idx, g, coxph_model, slopes, parms, dist, timevar, weighted=TRUE)
+{
+    data$node <- as.factor(idx)
+    SE <- rep(0,length(unique(data$ID)))
+
+    ntimes <- 100
+    evaltimes <- seq(from=min(data$time_Y),to=max(data$time_Y),length.out=ntimes)
+
+    for(j in unique(data$ID)){
+        tmpdata <- subset(data, ID==j);ntmp <- nrow(tmpdata)
+        tmpg <- subset(g, data$ID==j)
+        tmpdata[ntmp,'time_Y'] <- Inf
+        survmod <- survfit(coxph_model, newdata=tmpdata,individual=TRUE)
+        survmod$time <- survmod$time + tmpdata[1,'time_L']
+
+        pred_surv <- getsurv(survmod, evaltimes)
+        true_surv <- get_true_surv(slopes[tmpg,,drop=FALSE], parms, dist, tmpdata, evaltimes, timevar)
+
+        scores <- (pred_surv - true_surv)^2
+        ntimes <- length(evaltimes)
+        SE[j] <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes)) / diff(range(evaltimes))
+    }
+
+    if(weighted){
+        weights <- table(data$ID)
+        ISE <- sum(weights*SE)/sum(weights)
+    } else {
+        ISE <- mean(SE)
+    }
+    return(ISE)
+}
+
+get_true_surv <- function(slopes, parms, dist, data, evaltimes,timevar)
+{
+    ntimes <- length(evaltimes)
+    if(timevar & nrow(data)>1){
+        changepoint <- data$time_Y[1]
+        changepoint_timeidx <-  which(changepoint < evaltimes)[1]
+
+        # True S
+        STRUE <- matrix(0,nrow=2,ncol=length(evaltimes))
+        prob <- rep(0,2)
+        for(i in c(1:2)){
+            tmpebx <- exp(sum(slopes[i,] * data[i,c('X3','X4','X5')]))
+            if (dist=='exponential'){
+                STRUE[i,] <- exp(-tmpebx*evaltimes*parms$lambda)
+                prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
+            } else if (dist=='weibulld' | dist=='weibulli'){
+                STRUE[i,] <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
+                prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
+            } 
+        }
+        Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
+                  STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
+    } else {
+        tmpebx  <- exp(sum(slopes[1,] * data[1,c('X3','X4','X5')]))
+
+        if (dist=='exponential'){
+            Strue <- exp(-tmpebx*evaltimes*parms$lambda)
+        } else if (dist=='weibulld' | dist=='weibulli'){
+            Strue <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
+        } else if (dist=='lognormal'){
+            Strue <- (1-pnorm((log(evaltimes)-parms[1])/parms[2]))^tmpebx
+        }
+    }
+
+   return(Strue)
+}
+
+
