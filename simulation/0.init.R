@@ -1141,14 +1141,19 @@ eval_tree_pred_inout_jlctree <- function
 
     # get pred survival prob
     pred_parms <- array(0, c(Nobs, ncol(true_parms), 3))
-    pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh_diffs)
-    pred_parms[,,1] <- pred_parms_raw[as.character(idx),]
-    pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh)
-    pred_parms[,,2] <- rep(pred_parms_raw, each = Nobs)
-    pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffs)
-    pred_parms[,,3] <- pred_parms_raw[as.character(idx),]
+    if(!is.null(jlctree$coxph_model_diffh_diffs)){
+        pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh_diffs)
+        pred_parms[,,1] <- pred_parms_raw[as.character(idx),]
+    }
+    if(!is.null(jlctree$coxph_model_diffh)){
+        pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh)
+        pred_parms[,,2] <- rep(pred_parms_raw, each = Nobs)
+    }
+    if(!is.null(jlctree$coxph_model_diff)){
+        pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffs)
+        pred_parms[,,3] <- pred_parms_raw[as.character(idx),]
+    }
     MSE_b <- apply(pred_parms,3,function(x){mean(rowSums((true_parms-x)^2))})
-
 
     # ---------- Survival Prediction 
     ISE <- c(get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffh, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
@@ -1207,32 +1212,36 @@ get_cox_coef <- function(coxph_model){
 get_tree_ISE_jlctree <- function
 (data, idx, g, coxph_model, slopes, parms, dist, timevar, weighted=TRUE)
 {
-    data$node <- as.factor(idx)
-    SE <- rep(0,length(unique(data$ID)))
-
-    ntimes <- 100
-    evaltimes <- seq(from=min(data$time_Y),to=max(data$time_Y),length.out=ntimes)
-
-    for(j in unique(data$ID)){
-        tmpdata <- subset(data, ID==j);ntmp <- nrow(tmpdata)
-        tmpg <- subset(g, data$ID==j)
-        tmpdata[ntmp,'time_Y'] <- Inf
-        survmod <- survfit(coxph_model, newdata=tmpdata,individual=TRUE)
-        survmod$time <- survmod$time + tmpdata[1,'time_L']
-
-        pred_surv <- getsurv(survmod, evaltimes)
-        true_surv <- get_true_surv(slopes[tmpg,,drop=FALSE], parms, dist, tmpdata, evaltimes, timevar)
-
-        scores <- (pred_surv - true_surv)^2
-        ntimes <- length(evaltimes)
-        SE[j] <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes)) / diff(range(evaltimes))
-    }
-
-    if(weighted){
-        weights <- table(data$ID)
-        ISE <- sum(weights*SE)/sum(weights)
+    if(is.null(coxph_model)){
+        ISE <- 0
     } else {
-        ISE <- mean(SE)
+        data$node <- as.factor(idx)
+        SE <- rep(0,length(unique(data$ID)))
+
+        ntimes <- 100
+        evaltimes <- seq(from=min(data$time_Y),to=max(data$time_Y),length.out=ntimes)
+
+        for(j in unique(data$ID)){
+            tmpdata <- subset(data, ID==j);ntmp <- nrow(tmpdata)
+            tmpg <- subset(g, data$ID==j)
+            tmpdata[ntmp,'time_Y'] <- Inf
+            survmod <- survfit(coxph_model, newdata=tmpdata,individual=TRUE)
+            survmod$time <- survmod$time + tmpdata[1,'time_L']
+
+            pred_surv <- getsurv(survmod, evaltimes)
+            true_surv <- get_true_surv(slopes[tmpg,,drop=FALSE], parms, dist, tmpdata, evaltimes, timevar)
+
+            scores <- (pred_surv - true_surv)^2
+            ntimes <- length(evaltimes)
+            SE[j] <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes)) / diff(range(evaltimes))
+        }
+
+        if(weighted){
+            weights <- table(data$ID)
+            ISE <- sum(weights*SE)/sum(weights)
+        } else {
+            ISE <- mean(SE)
+        }
     }
     return(ISE)
 }

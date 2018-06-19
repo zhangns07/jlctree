@@ -231,6 +231,7 @@ get_split_utility <- function
     }
 }
 
+
 jlctree <- function
 (survival, ## Surv(start,end,event)~ cox ph vars
  classmb, ## Tree split vars
@@ -301,9 +302,11 @@ jlctree <- function
         coxph_formula_diffs <- as.formula(paste0(deparse(survival[[2]]),'~',
                                                  paste0(paste0(surv_vars,'*node'),collapse='+')))
     }
-    coxph_model_diffh_diffs <- coxph(coxph_formula_diffh_diffs, data, model=TRUE)
-    coxph_model_diffh <- coxph(coxph_formula_diffh, data, model=TRUE)
-    coxph_model_diffs <- coxph(coxph_formula_diffs, data, model=TRUE)
+
+    coxph_model_diffh_diffs <- tryCatch(coxph(coxph_formula_diffh_diffs, data, model=TRUE), error=function(e) NULL)
+    coxph_model_diffh <- tryCatch(coxph(coxph_formula_diffh, data, model=TRUE), error=function(e) NULL)
+    coxph_model_diffs <- tryCatch(coxph(coxph_formula_diffs, data, model=TRUE), error=function(e) NULL)
+
 
     return(list(tree=tree, lmm_model=lmm_model, 
            coxph_model_diffh_diffs=coxph_model_diffh_diffs,coxph_model_diffh=coxph_model_diffh,coxph_model_diffs=coxph_model_diffs))

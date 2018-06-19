@@ -57,9 +57,21 @@ if (FLAGS$survvar){
 } 
 
 RET <- matrix(0,ncol=66,nrow=Nsim) 
+filename <- paste0(FLAGS$outdir,'/',RETdir, RETbasefilename,'.csv')
+if(file.exists(filename)){
+    RET <- read.table(filename,sep=",",header=TRUE)
+    RET <- as.matrix(RET)
+    lastsim <- which(RET[,2] ==0)[1]
+    if(is.na(lastsim)){
+        stop('All simululations are done.')
+    }
+} else {
+    lastsim <- FLAGS$minsim
+}
 
-RET_iter <- 1
-for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
+
+RET_iter <- lastsim
+for (sim in c(lastsim:FLAGS$maxsim)){
     set.seed(sim)
 
     DATA <- gen_data_timevar(FLAGS, PARMS,seed=sim, FLAGS$survvar)
@@ -208,4 +220,5 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     filename <- paste0(FLAGS$outdir,'/',RETdir, RETbasefilename,'.csv')
     write.table(RET, file=filename, sep=',',col.names=TRUE, quote=FALSE)
 }
+
 
