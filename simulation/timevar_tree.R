@@ -2,7 +2,6 @@
 library(optparse)
 library(data.table)
 library(plyr)
-library(lcmm)
 source('0.init.R')
 source('0.gen_survival.R')
 source('../jlctree.R')
