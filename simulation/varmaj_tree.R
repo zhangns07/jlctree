@@ -75,7 +75,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                         fixed=y~X1+X2+X3+X4+X5,
                         random=~1,
                         classmb=~X1+X2+X3+X4+X5,
-                        subject='ID',maxng=6,data=data,greedy=greedy,
+                        subject='ID',maxng=6,data=data,greedy=FLAGS$greedy,
                         parms=list(test_stat=FLAGS$test, 
                                    stop_thre=Inf,min_nevent=3))
         tok <- Sys.time()
@@ -94,7 +94,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                 fixed=y~X1+X2+X3+X4+X5,
                 random=~1,
                 classmb=~X1+X2+X3+X4+X5,
-                subject='ID',maxng=6,data=data,greedy=greedy,
+                subject='ID',maxng=6,data=data,greedy=FLAGS$greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=FLAGS$stop_thre,min_nevent=3))
         tok <- Sys.time()
