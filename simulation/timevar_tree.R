@@ -21,7 +21,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-x", "--continuous"), type="logical", default=TRUE, help="Whether the predictors X1, X2 are continuous"),
                     make_option(c("-m", "--majprob"), type="numeric", default=0.85, help="Maximum probablity for majority family"),
-                    make_option(c("-w", "--survvar"), type="logical", default=TRUE, help="Whether X3-X5 is time varying")
+                    make_option(c("-w", "--survvar"), type="logical", default=TRUE, help="Whether X3-X5 is time varying"),
+                    make_option(c("-e", "--greedy"), type="logical", default=NULL, help="Whether use greedy jlctree")
                     )
 
 
@@ -36,6 +37,7 @@ if (FLAGS$alg == 'jlctree'){
     }
 }
 
+if(is.null(FLAGS$greedy)){FLAGS$greedy <- TRUE}
 PARMS <- get_parms(FLAGS$dist); parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D; 
 Nsim <- FLAGS$maxsim-FLAGS$minsim+1
 
@@ -96,7 +98,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[1]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3_one+X4_one+X5_one,
                          fixed=y~X1+X2+X3+X4+X5, random=~1,
                          classmb=~X1_one+X2_one+X3_one+X4_one+X5_one,
-                         subject='ID',maxng=6,data=data,
+                         subject='ID',maxng=6,data=data,greedy=greedy,
                          parms=list(test_stat=FLAGS$test, 
                                     stop_thre=Inf,min_nevent=3))
         tok <- Sys.time(); runtime[1] <- round(difftime(tok,tik,units='secs'),4)
@@ -105,7 +107,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[2]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3_one+X4_one+X5_one,
                 fixed=y~X1+X2+X3+X4+X5, random=~1,
                 classmb=~X1+X2+X3+X4+X5,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=Inf,min_nevent=3))
         tok <- Sys.time(); runtime[2] <- round(difftime(tok,tik,units='secs'),4)
@@ -114,7 +116,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[3]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3+X4+X5,
                 fixed=y~X1+X2+X3+X4+X5, random=~1,
                 classmb=~X1_one+X2_one+X3_one+X4_one+X5_one,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=Inf,min_nevent=3))
         tok <- Sys.time(); runtime[3] <- round(difftime(tok,tik,units='secs'),4)
@@ -124,7 +126,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[4]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3+X4+X5,
                 fixed=y~X1+X2+X3+X4+X5, random=~1,
                 classmb=~X1+X2+X3+X4+X5,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=Inf,min_nevent=3))
         tok <- Sys.time(); runtime[4] <- round(difftime(tok,tik,units='secs'),4)
@@ -156,7 +158,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[1]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3_one+X4_one+X5_one,
                          fixed=y~X1+X2+X3+X4+X5, random=~1,
                          classmb=~X1_one+X2_one+X3_one+X4_one+X5_one,
-                         subject='ID',maxng=6,data=data,
+                         subject='ID',maxng=6,data=data,greedy=greedy,
                          parms=list(test_stat=FLAGS$test, 
                                     stop_thre=FLAGS$stop_thre,min_nevent=3))
         tok <- Sys.time(); runtime[1] <- round(difftime(tok,tik,units='secs'),4)
@@ -165,7 +167,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[2]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3_one+X4_one+X5_one,
                 fixed=y~X1+X2+X3+X4+X5, random=~1,
                 classmb=~X1+X2+X3+X4+X5,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=FLAGS$stop_thre,min_nevent=3))
         tok <- Sys.time(); runtime[2] <- round(difftime(tok,tik,units='secs'),4)
@@ -174,7 +176,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[3]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3+X4+X5,
                 fixed=y~X1+X2+X3+X4+X5, random=~1,
                 classmb=~X1_one+X2_one+X3_one+X4_one+X5_one,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=FLAGS$stop_thre,min_nevent=3))
         tok <- Sys.time(); runtime[3] <- round(difftime(tok,tik,units='secs'),4)
@@ -184,7 +186,7 @@ for (sim in c(lastsim:FLAGS$maxsim)){
         treelist[[4]] <- jlctree(survival=Surv(time_L,time_Y,delta)~X3+X4+X5,
                 fixed=y~X1+X2+X3+X4+X5, random=~1,
                 classmb=~X1+X2+X3+X4+X5,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=FLAGS$stop_thre,min_nevent=3))
         tok <- Sys.time(); runtime[4] <- round(difftime(tok,tik,units='secs'),4)

@@ -22,7 +22,8 @@ option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, 
                     make_option(c("-s", "--stop_thre"), type="numeric", default=NULL, help=""),
                     make_option(c("-t", "--test"), type="character", default=NULL, help="Test statistics, rsq, lrt or wald."),
                     make_option(c("-x", "--continuous"), type="logical", default=TRUE, help="Whether the predictors X1, X2 are continuous"),
-                    make_option(c("-m", "--majprob"), type="numeric", default=0.85, help="Maximum probablity for majority family")
+                    make_option(c("-m", "--majprob"), type="numeric", default=0.85, help="Maximum probablity for majority family"),
+                    make_option(c("-e", "--greedy"), type="logical", default=NULL, help="Whether use greedy jlctree")
                     )
 
 
@@ -36,6 +37,8 @@ if (FLAGS$alg == 'jlctree'){
         stop('Missing argument: stop_thre and test.')
     }
 }
+
+if(is.null(FLAGS$greedy)){FLAGS$greedy<- TRUE}
 
 PARMS <- get_parms(FLAGS$dist); parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D; 
 Nsim <- FLAGS$maxsim-FLAGS$minsim+1
@@ -72,7 +75,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                         fixed=y~X1+X2+X3+X4+X5,
                         random=~1,
                         classmb=~X1+X2+X3+X4+X5,
-                        subject='ID',maxng=6,data=data,
+                        subject='ID',maxng=6,data=data,greedy=greedy,
                         parms=list(test_stat=FLAGS$test, 
                                    stop_thre=Inf,min_nevent=3))
         tok <- Sys.time()
@@ -91,7 +94,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
                 fixed=y~X1+X2+X3+X4+X5,
                 random=~1,
                 classmb=~X1+X2+X3+X4+X5,
-                subject='ID',maxng=6,data=data,
+                subject='ID',maxng=6,data=data,greedy=greedy,
                 parms=list(test_stat=FLAGS$test, 
                            stop_thre=FLAGS$stop_thre,min_nevent=3))
         tok <- Sys.time()
