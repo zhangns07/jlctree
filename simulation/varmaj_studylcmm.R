@@ -192,6 +192,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
     if (any(grepl(paste0('sim_',sim),grep(Rbasefilename, Rfilelist,value=TRUE)))){ 
         RET_iter <- RET_iter+1
+        cat('done.next.\n')
         next 
     }
 
