@@ -5,6 +5,7 @@ library(plyr)
 library(lcmm)
 source('0.init.R')
 source('0.gen_survival.R')
+
 gen_data <- function(FLAGS, PARMS, seed){
 
     Nsub <- FLAGS$Nsub
@@ -122,13 +123,13 @@ get_latent_class <- function(X,struct,member,seed=0,majprob=NULL){
                         tree=list('0.25' = 0, '0.5'=1, '0.7'=2, '0.85'=4.5, '0.99'=50), 
                         linear=list('0.25' = 0, '0.5'=1.5, '0.7'=3.8, '0.85'=9, '0.99'=150))
         Wmul <- Wlist[[as.character(majprob)]]
-    }
+    } 
 
     set.seed(seed)
     W <- matrix(rnorm(ncol(X) * 4),byrow=TRUE,nrow=4)
     W <- W/ apply(W,1,function(x){sqrt(sum(x^2))})
 
-    if (member == 'partition' ){
+    if (member == 'partition' || majprob==1 ){
         g <- apply(X,1,function(x){
                        weights <- W %*% (x-0.5)
                        which.max(weights)})
@@ -168,7 +169,7 @@ RETbasefilename <- paste0(paste0(names(opt2),"_",opt2),collapse="_")
 opt3 <- FLAGS; opt3$help <- NULL; opt3$outdir<- NULL; opt3$minsim<-NULL; opt3$maxsim<-NULL
 Rbasefilename <- paste0(paste0(names(opt3),"_",opt3),collapse="_")
 
-FLAGS$continuous <- FALSE
+FLAGS$continuous <- TRUE
 FLAGS$inter <- FALSE
 FLAGS$test <- 'lrt'
 FLAGS$member <- 'multinomial'
