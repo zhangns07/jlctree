@@ -180,8 +180,12 @@ RET <- matrix(0,ncol=7,nrow=Nsim)
 colnames(RET) <- c('sim','t1','t2','t3','t4','t5','t6')
 RET_iter <- 1
 
+Rfilelist <- list.files(FLAGS$outdir)
 for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
+    if (any(grepl(paste0('sim_',sim),grep(Rbasefilename, Rfilelist,value=TRUE)))){ next }
+
+
 
     DATA <- gen_data(FLAGS, PARMS,seed=sim)
     data <- DATA$data; pseudo_g <- DATA$pseudo_g
@@ -214,7 +218,7 @@ for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
             }
 
             if (mod$conv %in% c(4,5)){
-                mod <- Jointlcmm(fixed=y~~Xg1+Xg2+Xo1+Xo2+Xo3,
+                mod <- Jointlcmm(fixed=y~Xg1+Xg2+Xo1+Xo2+Xo3,
                                  classmb=classmb,subject='ID',mixture=~1,
                                  survival=Surv(time_L,time_Y,delta)~mixture(Xo1+Xo2+Xo3),
                                  hazard="Weibull",hazardtype="Specific",ng=ng,data=data,B=random(m1))
