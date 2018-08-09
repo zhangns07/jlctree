@@ -178,14 +178,21 @@ FLAGS$alg <- 'jlcmm'
 
 RET <- matrix(0,ncol=7,nrow=Nsim)
 colnames(RET) <- c('sim','t1','t2','t3','t4','t5','t6')
+filename <- paste0(FLAGS$outdir,'/',RETbasefilename,'.csv')
+if(file.exists(filename)){
+    RET <- read.table(filename,sep=',',header=TRUE)
+    RET <- as.matrix(RET)
+}
+
 RET_iter <- 1
 
 Rfilelist <- list.files(FLAGS$outdir)
 for (sim in c(FLAGS$minsim:FLAGS$maxsim)){
     set.seed(sim)
-    if (any(grepl(paste0('sim_',sim),grep(Rbasefilename, Rfilelist,value=TRUE)))){ next }
-
-
+    if (any(grepl(paste0('sim_',sim),grep(Rbasefilename, Rfilelist,value=TRUE)))){ 
+        RET_iter <- RET_iter+1
+        next 
+    }
 
     DATA <- gen_data(FLAGS, PARMS,seed=sim)
     data <- DATA$data; pseudo_g <- DATA$pseudo_g
