@@ -182,6 +182,7 @@ get_rsquare <- function(f, data){
 }
 
 
+if(1==0){# too simple to conclude an error
 get_loglik_diff <- function(f1, f2, data, stable=FALSE){
     ret <- tryCatch({
         # sometimes coxph fails, but works again after shuffling the data.
@@ -193,6 +194,12 @@ get_loglik_diff <- function(f1, f2, data, stable=FALSE){
                 data <- data[sample(c(1:nrow(data)),replace = TRUE),]
             } else  break 
         }
+        if(bo==10){
+            f1 <- Surv(start, end, event) ~ 1
+            coxml1 <- coxph(f1, data)
+            coxml1$loglik <- c(coxml1$loglik[1],coxml1$loglik[1])
+        }
+
 
         bo<-0
         while(bo!=10){
@@ -202,6 +209,12 @@ get_loglik_diff <- function(f1, f2, data, stable=FALSE){
                 data <- data[sample(c(1:nrow(data)),replace = TRUE),]
             } else  break 
         }
+        if(bo==10){
+            f2 <- Surv(start, end, event) ~ 1
+            coxml2 <- coxph(f2, data)
+            coxml2$loglik <- c(coxml2$loglik[1],coxml2$loglik[1])
+        }
+
 
         loglik_diff <- 2*(coxml2$loglik[2] - coxml1$loglik[2] )
 
@@ -216,7 +229,54 @@ get_loglik_diff <- function(f1, f2, data, stable=FALSE){
 
     return(ret)
 }
+}
 
+get_loglik_diff <- function(f1, f2, data, stable=FALSE){
+
+    coxml1 <- tryCatch({
+        bo<-0
+        while(bo!=10){
+            coxml1 = coxph(f1, data)
+            if (coxml1$loglik[2] < coxml1$loglik[1]){
+                bo <- bo+1
+                data <- data[sample(c(1:nrow(data)),replace = TRUE),]
+            } else  break 
+        }
+        coxml1
+    }, error = function(e){
+        f1 <- Surv(start, end, event) ~ 1
+        coxml1 <- coxph(f1, data)
+        coxml1$loglik <- c(coxml1$loglik[1],coxml1$loglik[1])
+        coxml1
+    })
+
+    coxml2 <- tryCatch({
+        bo<-0
+        while(bo!=10){
+            coxml2 = coxph(f2, data)
+            if (coxml2$loglik[2] < coxml2$loglik[1]){
+                bo <- bo+1
+                data <- data[sample(c(1:nrow(data)),replace = TRUE),]
+            } else  break 
+        }
+        coxml2
+    }, error = function(e){
+        f2 <- Surv(start, end, event) ~ 1
+        coxml2 <- coxph(f2, data)
+        coxml2$loglik <- c(coxml2$loglik[1],coxml2$loglik[1])
+        coxml2
+    })
+
+    loglik_diff <- 2*(coxml2$loglik[2] - coxml1$loglik[2] )
+
+    if(stable){
+        if (max(c(diag(coxml1$var), diag(coxml2$var))) > 1e5){
+            loglik_diff <- Inf
+        }
+    }
+    ret <- max(0,loglik_diff)
+    return(ret)
+}
 get_split_utility <- function
 (var_root, var_left, var_right, 
  test_stat=c('rsq','lrt','wald')[1]){
