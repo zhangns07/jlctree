@@ -1,0 +1,12 @@
+Package: jlctree
+Title: Joint Latent Class Trees for Joint Modeling of Time-to-event and Longitudinal Data
+Date: 2018-10-08
+Version: 0.0.1
+Author: Ningshan Zhang and Jeffrey S. Simonoff
+Maintainer: Ningshan Zhang <nzhang@stern.nyu.edu>
+Depends: survival, rpart, lme4
+Encoding: UTF-8
+License: GPL
+Description: The package implements the tree-based approach to joint modeling of 
+        time-to-event and longitudinal data. 
+RoxygenNote: 6.1.0
