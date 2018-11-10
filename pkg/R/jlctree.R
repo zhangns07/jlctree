@@ -138,18 +138,18 @@ jlctree <- function
         if(length(unique(tree$where)) > 1){
             node_ranef <- paste0('+ (', paste0(randvars, collapse='+') ,'|node)')
         } else {
-            warning('Cannot fit linear mixed-effects model 
-                    with node-specific random effects,
-                    when there is only one node.')
+            warning(paste('Drop node-specific random effects from linear mixed-effects model,',
+                           'since there is only one node.'))
+
             node_ranef <- ''
         }
 
         if(any(table(data[,subject]) > 1)){
             subj_ef <-  paste0('+ (1|', subject,')')
         } else {
-            warning('Cannot fit linear mixed-effects model 
-                    with subject-specific random intercepts,
-                    when there is one observation per subject.')
+            warning(paste('Drop subject-specific random intercepts from linear mixed-effects model,',
+                           'since there is only one observation per subject.'))
+
             subj_ef <-  ''
         }
 
