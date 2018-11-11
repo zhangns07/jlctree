@@ -22,13 +22,13 @@ longitudinal outcomes; required.
 The longitudinal outcome is on the left of \code{~} and the covariates are separated by \code{+} 
 on the right of \code{~}.}
 
-\item{random}{one-sided formula for the node-specific random-effects in the linear mixed-effects model for 
+\item{random}{one-sided formula for the node-specific random effects in the linear mixed-effects model for 
 longitudinal outcomes; optional. 
-If missing, there are no node-specific random-effects in the fitted linear mixed-effects model.
-Covariates with a random-effect are separated by \code{+} on the right of \code{~}.}
+If missing, there are no node-specific random effects in the fitted linear mixed-effects model.
+Covariates with a random effect are separated by \code{+} on the right of \code{~}.}
 
 \item{subject}{name of the covariate representing the subject identifier; optional. 
-If missing, there are no subject-specific random-effects in the fitted linear mixed-effects model for
+If missing, there are no subject-specific random intercepts in the fitted linear mixed-effects model for
 longitudinal outcomes.}
 
 \item{data}{the dataset; required.}
