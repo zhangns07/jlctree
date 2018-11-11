@@ -17,14 +17,19 @@ excluding the longitudinal outcome.}
 \item{classmb}{one-sided formula describing the covariates in the class-membership tree construction; required.
 Covariates used for tree construction are separated by \code{+} on the right of \code{~}.}
 
-\item{fixed}{two-sided linear formula object for the fixed-effects in the linear mixed model; required.
+\item{fixed}{two-sided linear formula object for the fixed-effects in the linear mixed-effects model for 
+longitudinal outcomes; required.
 The longitudinal outcome is on the left of \code{~} and the covariates are separated by \code{+} 
 on the right of \code{~}.}
 
-\item{random}{one-sided formula for the random-effects in the linear mixed model; required.
+\item{random}{one-sided formula for the node-specific random-effects in the linear mixed-effects model for 
+longitudinal outcomes; optional. 
+If missing, there are no node-specific random-effects in the fitted linear mixed-effects model.
 Covariates with a random-effect are separated by \code{+} on the right of \code{~}.}
 
-\item{subject}{name of the covariate representing the subject identifier; required.}
+\item{subject}{name of the covariate representing the subject identifier; optional. 
+If missing, there are no subject-specific random-effects in the fitted linear mixed-effects model for
+longitudinal outcomes.}
 
 \item{data}{the dataset; required.}
 
@@ -38,8 +43,9 @@ A list with components:
  \item{tree}{an \code{rpart} object, containing the constructed Joint Latent Class tree.}
  \item{control}{the \code{rpart.control} parameters.}
  \item{parms}{the \code{jlctree.control} parameters.}
- \item{lmmmodel}{an \code{lme4} object, containing the linear mixed effects model
-     with fixed effects, node-specific random effects, and subject-specific random intercepts. 
+ \item{lmmmodel}{an \code{lme4} object, containing the linear mixed-effects effects model
+     with fixed effects, node-specific random effects (if valid), 
+     and subject-specific random intercepts (if valid). 
      Returned when \code{fity} is TRUE.}
  \item{coxphmodel_diffh_diffs}{a \code{coxph} object, containing a Cox PH model
      with different hazards and different slopes across terminal nodes.
