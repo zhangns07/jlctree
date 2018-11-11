@@ -11,12 +11,17 @@
 #'      excluding the longitudinal outcome.
 #' @param classmb one-sided formula describing the covariates in the class-membership tree construction; required.
 #'      Covariates used for tree construction are separated by \code{+} on the right of \code{~}.
-#' @param fixed two-sided linear formula object for the fixed-effects in the linear mixed model; required.
+#' @param fixed two-sided linear formula object for the fixed-effects in the linear mixed-effects model for 
+#'      longitudinal outcomes; required.
 #'      The longitudinal outcome is on the left of \code{~} and the covariates are separated by \code{+} 
 #'      on the right of \code{~}.
-#' @param random one-sided formula for the random-effects in the linear mixed model; required.
+#' @param random one-sided formula for the node-specific random-effects in the linear mixed-effects model for 
+#'      longitudinal outcomes; optional. 
+#'      If missing, there are no node-specific random-effects in the fitted linear mixed-effects model.
 #'      Covariates with a random-effect are separated by \code{+} on the right of \code{~}.
-#' @param subject name of the covariate representing the subject identifier; required.
+#' @param subject name of the covariate representing the subject identifier; optional. 
+#'      If missing, there are no subject-specific random-effects in the fitted linear mixed-effects model for
+#'      longitudinal outcomes.
 #' @param data the dataset; required.
 #' @param parms parameter list of Joint Latent Class Tree model parameters. 
 #'      See also \code{jlctree.control}.
@@ -26,8 +31,9 @@
 #'  \item{tree}{an \code{rpart} object, containing the constructed Joint Latent Class tree.}
 #'  \item{control}{the \code{rpart.control} parameters.}
 #'  \item{parms}{the \code{jlctree.control} parameters.}
-#'  \item{lmmmodel}{an \code{lme4} object, containing the linear mixed effects model
-#'      with fixed effects, node-specific random effects, and subject-specific random intercepts. 
+#'  \item{lmmmodel}{an \code{lme4} object, containing the linear mixed-effects effects model
+#'      with fixed effects, node-specific random effects (if valid), 
+#'      and subject-specific random intercepts (if valid). 
 #'      Returned when \code{fity} is TRUE.}
 #'  \item{coxphmodel_diffh_diffs}{a \code{coxph} object, containing a Cox PH model
 #'      with different hazards and different slopes across terminal nodes.
@@ -93,6 +99,7 @@ jlctree <- function
         stop("Invalid survival argument.")
     }
 
+
 #    # check if longitudinal and survival covariates are truly time-invariant.
 #    if(!parms$LTRC){
 #        ID <- data[,subject]; IDorder <- order(ID); ID <- ID[IDorder]
@@ -130,27 +137,37 @@ jlctree <- function
 
     # Fit lmm model.
     if(parms$fity){
-        data$node <- as.factor(tree$where)
-        randvars <- labels(terms(random)); 
-        if (length(randvars) == 0) 
-            randvars  <- '1'
-
-        if(length(unique(tree$where)) > 1){
-            node_ranef <- paste0('+ (', paste0(randvars, collapse='+') ,'|node)')
-        } else {
-            warning(paste('Drop node-specific random effects from linear mixed-effects model,',
-                           'since there is only one node.'))
-
+        if(missing(random)){
+            cat(paste0('Argument "random" is missing. No node-specific random effects in linear mixed-effects model for ', yvar,'.\n'))
             node_ranef <- ''
+        } else {
+            data$node <- as.factor(tree$where)
+            randvars <- labels(terms(random)); 
+            if (length(randvars) == 0) 
+                randvars  <- '1'
+
+            if(length(unique(tree$where)) > 1){
+                node_ranef <- paste0('+ (', paste0(randvars, collapse='+') ,'|node)')
+            } else {
+                warning(paste0('Drop node-specific random effects from linear mixed-effects model for ', yvar,
+                              ', since there is only one node.'))
+
+                node_ranef <- ''
+            }
         }
 
-        if(any(table(data[,subject]) > 1)){
-            subj_ef <-  paste0('+ (1|', subject,')')
+        if (missing(subject)){
+            cat(paste0('Argument "subject" is missing. No subject-specific random effects in linear mixed-effects model for ', yvar,'.\n'))
+            subj_ef <- ''
         } else {
-            warning(paste('Drop subject-specific random intercepts from linear mixed-effects model,',
-                           'since there is only one observation per subject.'))
+            if(any(table(data[,subject]) > 1)){
+                subj_ef <-  paste0('+ (1|', subject,')')
+            } else {
+                warning(paste0('Drop subject-specific random intercepts from linear mixed-effects model for ', yvar,
+                              ', since there is only one observation per subject.'))
 
-            subj_ef <-  ''
+                subj_ef <-  ''
+            }
         }
 
         lmerf <- as.formula(paste0(Reduce(paste0, deparse(fixed)), node_ranef,  subj_ef ))
