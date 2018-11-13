@@ -132,6 +132,7 @@ jlctree <- function
 
     # Prune to have at most parms$maxng nodes.
     tree <- prune_tree(tree, parms$maxng)
+    data$node <- as.factor(tree$where)
     RET <- list(tree=tree, control=control, parms=parms)
 
 
@@ -141,7 +142,6 @@ jlctree <- function
             cat(paste0('Argument "random" is missing. No node-specific random effects in linear mixed-effects model for ', yvar,'.\n'))
             node_ranef <- ''
         } else {
-            data$node <- as.factor(tree$where)
             randvars <- labels(terms(random)); 
             if (length(randvars) == 0) 
                 randvars  <- '1'
