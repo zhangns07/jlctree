@@ -17,7 +17,7 @@
 #'
 #' @importFrom survival coxph Surv
 #' @seealso \code{\link{surve},\link{survi}}
-#' @references \url{https://cran.r-project.org/web/packages/rpart/vignettes/usercode.pdf}
+#' @references \url{https://cran.r-project.org/package=rpart/vignettes/usercode.pdf}
 #' @export
 
 survs <- function

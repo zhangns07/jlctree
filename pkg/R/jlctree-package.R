@@ -46,5 +46,6 @@
 #' @docType package
 #' @keywords package
 #' @name jlctree-package
+#' @references {Ningshan Zhang and Jeffrey S. Simonoff: Joint Latent Class Trees: A Tree-Based Approach to Joint Modeling of Time-to-event and Longitudinal Data. arXiv:1812.01774 (2018).}
 NULL
 

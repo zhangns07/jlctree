@@ -47,6 +47,9 @@ See the simulated \code{data_timevar} and \code{data_timeinv} for examples
 of LTRC format and right-censored format respectively.
 }
 }
+\references{
+{Ningshan Zhang and Jeffrey S. Simonoff: Joint Latent Class Trees: A Tree-Based Approach to Joint Modeling of Time-to-event and Longitudinal Data. arXiv:1812.01774 (2018).}
+}
 \seealso{
 \code{\link{jlctree}, \link{data_timeinv}, \link{data_timevar}}
 }

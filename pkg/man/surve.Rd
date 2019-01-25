@@ -24,7 +24,7 @@ Defines the evaluation function for a new splitting method of \code{rpart}.
  Not to be called directly by the user.
 }
 \references{
-\url{https://cran.r-project.org/web/packages/rpart/vignettes/usercode.pdf}
+\url{https://cran.r-project.org/package=rpart/vignettes/usercode.pdf}
 }
 \seealso{
 \code{\link{survs},\link{survi}}

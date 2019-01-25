@@ -15,7 +15,7 @@
 #' @return See reference.
 #'
 #' @seealso \code{\link{survs},\link{surve}}
-#' @references \url{https://cran.r-project.org/web/packages/rpart/vignettes/usercode.pdf}
+#' @references \url{https://cran.r-project.org/package=rpart/vignettes/usercode.pdf}
 #' @export
 
 
