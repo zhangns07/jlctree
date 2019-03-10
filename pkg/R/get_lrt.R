@@ -50,11 +50,17 @@ get_lrt <- function(f1, f2, data, stable=TRUE, cov.max=1e5){
     loglik_diff <- 2*(coxml2$loglik[2] - coxml1$loglik[2] )
 
     if(stable){
+        # If the estimate is unstable, set the diff to be Inf.
+        # Thus, the split leading to this data will not be considered.
         if (max(c(diag(coxml1$var), diag(coxml2$var))) > cov.max){
             loglik_diff <- Inf
         }
     }
+
+    # If some fit doesnt went wrong, set 
+    if(is.na(loglik_diff)){loglik_diff <- Inf}
     ret <- max(0,loglik_diff)
     return(ret)
 }
+
 

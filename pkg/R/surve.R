@@ -30,8 +30,14 @@ surve <- function
         formulay2 <- Surv(end, event) ~ .
     }
 
-    nodeval <- get_node_val(formulay1, formulay2, y, 
-                             lrt=parms$lrt, stable=parms$stable)
+
+    nevents <- sum(y[,'event'])
+    if(nevents  <= parms$min.nevents){
+        nodeval <- 0
+    } else {
+        nodeval <- get_node_val(formulay1, formulay2, y, 
+                                lrt=parms$lrt, stable=parms$stable, cov.max=parms$cov.max)
+    }
     # deviance: it should be closely related to the split criteria.
     # label: does not matter, but we use node_val here.
     list(label = nodeval, deviance = nodeval)
