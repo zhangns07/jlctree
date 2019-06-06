@@ -4,168 +4,47 @@ library(lme4)
 library(ipred)
 library(prodlim)
 
+gen_model_timeinv_survival <- function
+(ebx, #exp(beta^T x) 
+ dist=c('exponential','weibulld','weibulli','lognormal')[1],#,'bathtub')[1],
+ parms
+ ){
+    n <- length(ebx)
+    u <- runif(n)
+    logu <- log(u)
 
-eval_tree_pred<- function
-(data,dist, slopes, parms, node_idx, g=NULL){
-    Nsub_pseudo  <- nrow(data)
-    if (is.null(g)){
-        g <- 2*(data$X1)+data$X2+1
-    } 
-    ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
-
-    # ---------- Survival Prediction 
-    # get true survival prob
-    pred_parms <- matrix(0,nrow=Nsub_pseudo,ncol=3)
-    true_parms <- slopes[g,]
-
-    # get predicted survival prob
-    d_idx <- node_idx
-    formula <-Surv(time_L,time_Y,delta) ~ X3+X4+X5
-
-    times <- sort(data$time_Y)
-    timessub <- seq(from=min(times),to=max(times), length.out = 100)
-    ntimes <- length(timessub)
-    ISE <- 0
-
-    # purity
-    tmptable <- table(node_idx, g)
-    purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/nrow(data)
-
-    for (i in unique(d_idx)){
-        subset_id <- d_idx== i
-        tmpdata <- data[subset_id,]
-        bo<-0
-        while(bo!=10){
-            mod  <- try(coxph(formula, tmpdata),silent=TRUE)
-            if (class(mod)=="try-error") {
-                bo <- bo+1
-                tmpdata <- tmpdata[sample(c(1:nrow(tmpdata)),replace = TRUE),]
-            } else break 
-        }
-
-        KM <- FALSE
-        if (class(mod)=="try-error") {
-            mod <- coxph(Surv(time_L,time_Y,delta) ~ 1, tmpdata)
-            KM <- TRUE
-        }
-
-        for (x in c(1:nrow(tmpdata))){
-            if(!KM){
-                Shat <- getsurv(survfit(mod,newdata=tmpdata[x,]),timessub)
-            } else{
-                Shat <- getsurv(survfit(mod),timessub)
-            }
-
-            #tmpg <- 2*(tmpdata[x,'X1'])+tmpdata[x,'X2']+1
-            tmpg <- g[subset_id][x]
-            tmpebx <- exp(sum(slopes[tmpg,] * tmpdata[x,c('X3','X4','X5')]))
-            if (dist=='exponential'){
-                Strue <- exp(-tmpebx*timessub*parms$lambda)
-            } else if (dist=='weibulld' | dist=='weibulli'){
-                Strue <- exp(-(timessub/parms$beta)^(parms$alp) * tmpebx)
-            } else if (dist=='lognormal'){
-                tmpparms <- parms[tmpg,]
-                Strue <- (1-pnorm((log(timessub)-tmpparms[1])/tmpparms[2]))^tmpebx
-            }
-
-
-            scores <- (Shat - Strue)^2
-            SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(timessub)) / diff(range(timessub))
-            ISE <- ISE + SE
-        }
-
-        if (!KM){
-            pred_parms[subset_id,] <- rep(mod$coefficients,each=sum(subset_id))
-        } else {
-            pred_parms[subset_id,] <- rep(c(0,0,0),each=sum(subset_id))
-        }
+    if (dist=='exponential'){
+        time_T <- -logu / (ebx*parms$lambda)
+    } else if (dist=='weibulld' | dist=='weibulli'){
+        time_T <- parms$beta * (-logu / ebx)^(1/parms$alp)
+    }  else if (dist=='lognormal'){
+        time_T <- exp(parms[,2]*qnorm(1-u/ebx)+parms[,1])
     }
-
-    ISE <- ISE/Nsub_pseudo
-
-    pred_parms[is.na(pred_parms)] <- 0
-    MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
-
-    # ---------- Biomarker Prediction
-    if(length(unique(data$ID))== nrow(data)){
-        ymod <- lm(y ~ d_idx, data=data)
-    } else {
-        ymod <- lmer(y ~ d_idx + (1|ID),data=data)
-    }
-    pred_y<- predict(ymod)
-    MSE_y <- mean((pred_y - data$y)^2)
-
-    return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y,purity=purity),4))
+    return (time_T)
 }
 
-eval_lcmm_pred<- function
-(data, dist, slopes, parms, mod,g=NULL,inter=TRUE){
-    Nsub_pseudo<- nrow(data)
-    if(is.null(g)){
-        g <- 2*(data$X1)+data$X2+1
+gen_model_timevar_survival <- function
+(ebx, # should be a matrix of two columns
+ dist=c('exponential','weibulld','weibulli'),#'lognormal')[1],#,'bathtub')[1],
+ parms,
+ t1 # change points
+ ){
+    n <- nrow(ebx)
+    u <- runif(n)
+    logu <- log(u)
+
+    if (dist=='exponential'){
+        St1 <- exp(-t1*ebx[,1]*parms$lambda)
+        time_T <- ifelse(u > St1, 
+                         -logu / (ebx[,1]*parms$lambda),
+                         (-logu +log(St1))/(parms$lambda*ebx[,2])+t1)
+    } else if (dist=='weibulld' | dist=='weibulli'){
+        St1 <- exp(-(t1/parms$beta)^(parms$alp)*ebx[,1])
+        time_T <- ifelse(u > St1,
+                         parms$beta * (-logu / ebx[,1])^(1/parms$alp),
+                         ((-logu+log(St1))*(parms$beta^parms$alp)/ebx[,2]+t1^(parms$alp))^(1/parms$alp))
     }
-    true_parms <- slopes[g,]
-    ebx <- exp(rowSums(slopes[g,] * cbind(data$X3,data$X4,data$X5)))
-
-    #  coeff
-    nclasses <- ncol(mod$pprob)-2
-    coefs <- mod$best
-    coefstart <- max(which(grepl('Weibull',names(coefs))))+1
-    pred_slopes <- matrix(coefs[coefstart:(coefstart+nclasses*3-1)],nrow=nclasses,ncol=3)
-
-    # predclass
-    predclass <- (mod$pprob$class)[data$ID]
-    #coefend <- min(which(grepl('Weibull',names(coefs))))-1
-    #coefs_multilogit <- matrix(coefs[1:coefend],nrow=nclasses-1)
-    #tmpX <- cbind(1,data[,c('X1','X2','X3','X4','X5')])
-    #if(inter){
-    #    tmpX <- cbind(tmpX,data[,'X1']*data[,'X2'])
-    #}
-
-    #tmp1 <- as.matrix(tmpX) %*% t(coefs_multilogit)
-    #predclass <- apply(tmp1, 1,function(x){ which.max(exp(c(x,0)))})
-
-
-    pred_parms <- pred_slopes[predclass,]
-    MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
-
-    # purity
-    tmptable <- table(predclass, g)
-    purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/nrow(data)
-
-    # Shat
-    times <- mod$predSurv[,1]
-    ntimes <- length(times)
-    ISE <- 0
-
-    for (x in c(1:nrow(data))){
-        tmpclass <- predclass[x]
-        tmpebx <- exp(sum(pred_slopes[tmpclass,] * data[x,c('X3','X4','X5')]))
-        Shat <- exp(-tmpebx*mod$predSurv[,paste0('event1.CumRiskFct',tmpclass)])
-
-        tmpg <- g[x]
-        tmpebx <- exp(sum(slopes[tmpg,] * data[x,c('X3','X4','X5')]))
-        if (dist=='exponential'){
-            Strue <- exp(-tmpebx*times*parms$lambda)
-        } else if (dist=='weibulld' | dist=='weibulli'){
-            Strue <- exp(-(times/parms$beta)^(parms$alp) * tmpebx)
-        } else if (dist=='lognormal'){
-            tmpparms <- parms[tmpg,]
-            Strue <- (1-pnorm((log(times)-tmpparms[1])/tmpparms[2]))^tmpebx
-        }
-
-        scores <- (Shat - Strue)^2
-        SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(times)) / diff(range(times))
-        ISE <- ISE + SE
-    }
-
-    ISE <- ISE/Nsub_pseudo
-
-    # ---------- Biomarker Prediction
-    pred_y <- (mod$pred$pred_ss)
-    MSE_y <- mean((pred_y - data$y)^2)
-
-    return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y, purity=purity),4))
+    return (time_T)
 }
 
 
@@ -258,7 +137,8 @@ get_latent_class <- function(X1,X2,struct,member,seed=0,majprob=NULL){
             f2 <- (X1-0)^2+(X2-1)^2 < 0.75^2
             g <- ifelse(f1, ifelse(f2, 4,1),ifelse(f2, 2,3))
         } else if (struct == 'asym'){
-            g <- ifelse(X1>0.75, 1, ifelse(X2<0.33, 2, ifelse(X2<0.67,3,4)))
+            #g <- ifelse(X1>0.75, 1, ifelse(X2<0.33, 2, ifelse(X2<0.67,3,4)))
+            g <- ifelse(X1>0.75, 1, ifelse(X2<0.33, 2, ifelse(X2<0.67,4,3)))
         } else if (struct == 'quad'){
             g <- ifelse(X1<0.25,1,ifelse(X1<0.5,4,ifelse(X1<0.75,2,3)))
         }
@@ -314,7 +194,14 @@ gen_data <- function(FLAGS, PARMS, seed){
     X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
     X <- cbind(X1,X2,X3,X4,X5)
 
-    g <- get_latent_class(X1,X2,FLAGS$struct, FLAGS$member, seed=seed, FLAGS$majprob)
+    #g <- get_latent_class(X1,X2,FLAGS$struct, FLAGS$member, seed=seed, FLAGS$majprob)
+
+    if (FLAGS$majprob==1){
+        g <- get_latent_class(X1,X2,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
+    } else {
+        g <- get_latent_class(X1,X2,FLAGS$struct, 'multinomial', seed=seed, FLAGS$majprob)
+    }
+
     if(FLAGS$dist == 'lognormal'){ 
         ebx <- rep(1 , 2*Nsub)
         tmp_parms <- parms[g,]
@@ -323,7 +210,7 @@ gen_data <- function(FLAGS, PARMS, seed){
         tmp_parms <- parms
     }
 
-    time_T <- gen_model3_survival(ebx, dist, tmp_parms)
+    time_T <- gen_model_timeinv_survival(ebx, dist, tmp_parms)
     time_L <- runif(2*Nsub, min=0, max=1)
 
     time_tokeep <- time_L < time_T
@@ -406,117 +293,6 @@ predict_class <- function(obj, newdata){
     return (test_class)
 }
 
-get_tree_ISE <- function(mod, subdata, subg, evaltimes, dist, slopes, parms,  KM){
-
-    ISE <- 0
-    for (x in c(1:nrow(subdata))){
-        if(!KM){
-            Shat <- getsurv(survfit(mod,newdata=subdata[x,]),evaltimes)
-        } else{
-            Shat <- getsurv(survfit(mod),evaltimes)
-        }
-
-        tmpg <- subg[x]
-        tmpebx <- exp(sum(slopes[tmpg,] * subdata[x,c('X3','X4','X5')]))
-
-        if (dist=='exponential'){
-            Strue <- exp(-tmpebx*evaltimes*parms$lambda)
-        } else if (dist=='weibulld' | dist=='weibulli'){
-            Strue <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
-        } else if (dist=='lognormal'){
-            tmpparms <- parms[tmpg,]
-            Strue <- (1-pnorm((log(evaltimes)-tmpparms[1])/tmpparms[2]))^tmpebx
-        }
-
-        scores <- (Shat - Strue)^2
-        ntimes <- length(evaltimes)
-        SE <- sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes)) / diff(range(evaltimes))
-        ISE <- ISE+SE
-    }
-
-    return (ISE)
-}
-
-eval_tree_pred_inout <- function
-(data, data_test, dist, slopes, parms, 
- idx, idx_test, 
- g, g_test){
-
-    Nobs <- nrow(data); Nobs_test <- nrow(data_test)
-    ebx <- exp(rowSums(slopes[g,] * data[,c('X3','X4','X5')]))
-    ebx_test <- exp(rowSums(slopes[g_test,] * data_test[,c('X3','X4','X5')]))
-
-    uniqd <- unique(idx)
-
-    # ---------- Survival Prediction 
-    # get true survival prob
-    pred_parms <- matrix(0,nrow=Nobs,ncol=3)
-    true_parms <- slopes[g,]
-
-    # get predicted survival prob
-    formula <-Surv(time_L,time_Y,delta) ~ X3+X4+X5
-
-    ntimes <- 100
-    evaltimes <- seq(from=min(data$time_Y),to=max(data$time_Y),length.out=ntimes)
-    evaltimes_test <- seq(from=min(data_test$time_Y),to=max(data_test$time_Y),length.out=ntimes)
-    ISE <- 0; ISE_test <- 0
-
-    for (i in uniqd){
-        # subsets
-        sid <- idx == i; sdata <- data[sid,]; sg <- g[sid]
-        sid_test <- idx_test==i; sdata_test <- data_test[sid_test,]; sg_test <- g_test[sid_test]
-
-        KM <- FALSE; err <-0
-        while(err!=10){
-            mod  <- try(coxph(formula, sdata),silent=TRUE)
-            if (class(mod)=="try-error") {
-                err <- err +1;  sdata <- sdata[sample(c(1:nrow(sdata)),replace = TRUE),]
-            } else break 
-        }
-        if (class(mod)=="try-error") { mod <- coxph(Surv(time_L,time_Y,delta) ~ 1, sdata); KM <- TRUE }
-        orgsdata <- data[sid,]; #if sdata has been reordered, then survfit(mod) will have trouble.
-
-        ISE <- ISE + get_tree_ISE(mod, orgsdata, sg, evaltimes, dist, slopes, parms, KM)
-        if(nrow(sdata_test)>0){
-            ISE_test <- ISE_test + get_tree_ISE(mod, sdata_test, sg_test, evaltimes_test, dist, slopes,parms, KM)
-        }
-
-        if (!KM){
-            pred_parms[sid,] <- rep(mod$coefficients,each=nrow(sdata))
-        } else {
-            pred_parms[sid,] <- rep(c(0,0,0),each=nrow(sdata))
-        }
-    }
-    ISE <- ISE/Nobs; ISE_test <- ISE_test/Nobs_test
-
-    pred_parms[is.na(pred_parms)] <- 0
-    MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
-
-    # ---------- Biomarker Prediction
-    data$idx <- factor(idx)
-    data_test$idx <- factor(idx_test); data_test$ID <- 0
-
-    if(length(unique(idx))==1){
-        #        ymod <- lm(y ~ idx, data=data)
-        ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|ID), data=data)
-    } else {
-        #        ymod <- lmer(y ~ idx + (1|ID),data=data)
-        ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|idx) + (1|ID),data=data)
-    }
-    predy<- predict(ymod); predy_test <- predict(ymod,newdata=data_test, allow.new.levels=TRUE)
-    MSE_y <- mean((predy - data$y)^2); MSE_y_test <- mean((predy_test - data_test$y)^2)
-
-    # purity
-    tmptable <- table(idx, g)
-    purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs
-
-    tmptable <- table(idx_test, g_test)
-    purity_test <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs_test
-
-
-    return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y,purity=purity,
-                   ISE_test=ISE_test, MSE_y_test = MSE_y_test,purity_test=purity_test),4))
-}
 
 get_lcmm_ISE <- function(mod, data, g, predclass, dist, slopes, parms){
     times <- mod$predSurv[,1]
@@ -614,7 +390,7 @@ eval_lcmm_pred_inout <- function
 }
 
 
-gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
+gen_data_timevar <- function(FLAGS, PARMS, seed){
 
     Nsub <- FLAGS$Nsub
     censor_rate <- FLAGS$censor
@@ -642,13 +418,9 @@ gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
     X4 <- round(runif(2*Nsub),1)
     X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
 
-    if (survvar){
-        X3_next <- as.numeric(runif(2*Nsub)>0.5)
-        X4_next <- round(pmax(pmin(X4 + runif(2*Nsub, min=-0.3, max=0.3),1),0),1)
-        X5_next <- pmax(pmin(X5+sample(c(0,-1,1),2*Nsub,replace=TRUE),5),1)
-    } else {
-        X3_next <- X3; X4_next <- X4; X5_next <- X5
-    }
+    X3_next <- as.numeric(runif(2*Nsub)>0.5)
+    X4_next <- round(pmax(pmin(X4 + runif(2*Nsub, min=-0.3, max=0.3),1),0),1)
+    X5_next <- pmax(pmin(X5+sample(c(0,-1,1),2*Nsub,replace=TRUE),5),1)
 
     if (FLAGS$majprob==1){
         g <- get_latent_class(X1,X2,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
@@ -664,7 +436,7 @@ gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
     ebx2 <- exp(rowSums(slopes[g_next,] * cbind(X3_next,X4_next,X5_next))) 
     ebx <- cbind(ebx1,ebx2)
     changepoint <- runif(2*Nsub, min=1,max=3)
-    time_T <- gen_model4_survival(ebx,dist,parms,changepoint)
+    time_T <- gen_model_timevar_survival(ebx,dist,parms,changepoint)
     time_L <- runif(2*Nsub, min=0, max=1)
 
     time_tokeep <- time_L < time_T
@@ -726,206 +498,6 @@ gen_data_timevar <- function(FLAGS, PARMS, seed, survvar=FALSE){
     data <- cbind(LTRC_data,y)
 
     return(list(data=data,pseudo_g=pseudo_g))
-}
-
-
-eval_tree_pred_inout_timevar <- function
-(data, data_test, dist, slopes, parms, 
- idx, idx_test, 
- g, g_test,
- firstobs=FALSE){
-
-    Nobs <- nrow(data); Nobs_test <- nrow(data_test)
-    #ebx <- exp(rowSums(slopes[g,] * data[,c('X3','X4','X5')]))
-    #ebx_test <- exp(rowSums(slopes[g_test,] * data_test[,c('X3','X4','X5')]))
-
-    uniqd <- unique(idx)
-
-    if(firstobs){ # only use first observation in fitting.
-        data_tmp <- data.table(data)
-        data_tmp <- data_tmp[,list(X1=X1[1],X2=X2[1],X3=X3[1],X4=X4[1],X5=X5[1],g=g[1],time_L,time_Y,delta,y),by =ID]
-        data_touse <- data_tmp
-
-        data_tmp <- data.table(data_test)
-        data_tmp <- data_tmp[,list(X1=X1[1],X2=X2[1],X3=X3[1],X4=X4[1],X5=X5[1],g=g[1],time_L,time_Y,delta,y),by =ID]
-        data_test_touse <- data_tmp
-    } else {
-        data_touse <- data
-        data_test_touse <- data_test
-    }
-
-    # ---------- Survival Prediction 
-    # get true survival prob
-    pred_parms <- matrix(0,nrow=Nobs,ncol=3)
-    true_parms <- slopes[g,]
-
-    # get predicted survival prob
-    formula <-Surv(time_L,time_Y,delta) ~ X3+X4+X5
-
-    for (i in uniqd){
-        # subsets
-        sid <- idx == i; sdata <- data_touse[sid,]; sg <- g[sid]
-        sid_test <- idx_test==i; sdata_test <- data_test_touse[sid_test,]; sg_test <- g_test[sid_test]
-
-        KM <- FALSE; err <-0
-        while(err!=10){
-            mod  <- try(coxph(formula, sdata,model=TRUE),silent=TRUE)
-            if (class(mod)=="try-error") {
-                err <- err +1;  sdata <- sdata[sample(c(1:nrow(sdata)),replace = TRUE),]
-            } else break 
-        }
-        if (class(mod)=="try-error") { mod <- coxph(Surv(time_L,time_Y,delta) ~ 1, sdata); KM <- TRUE }
-        assign(paste0('mod',i),mod)
-        assign(paste0('KM',i),KM)
-
-        if (!KM){
-            pred_parms[sid,] <- rep(mod$coefficients,each=nrow(sdata))
-        } else {
-            pred_parms[sid,] <- rep(c(0,0,0),each=nrow(sdata))
-        }
-    }
-
-    # ---------- Parameter Prediction
-    pred_parms[is.na(pred_parms)] <- 0
-    MSE_b <- mean(rowSums((true_parms - pred_parms)^2))
-
-
-    # ---------- ISE in sample
-    ntimes <- 100
-    evaltimes <- seq(from=min(data$time_Y),to=max(data$time_Y),length.out=ntimes)
-    ISE <- 0
-
-    for (x in unique(data$ID)){
-        sdata <- subset(data,ID==x)
-        sg <- subset(g, data$ID==x)
-        si <- subset(idx, data$ID==x)
-
-        changepoint <- sdata$time_Y[1]
-        changepoint_timeidx <-  which(changepoint < evaltimes)[1]
-
-        if(nrow(sdata)==1){
-            mod <- get(paste0('mod',si));
-            KM <- get(paste0('KM',si));
-            ISE <- ISE + get_tree_ISE(mod, sdata, sg, evaltimes, dist, slopes,parms,KM)
-        } else {
-            # Shat
-            SHAT <- matrix(0,nrow=2,ncol=length(evaltimes))
-            prob <- rep(0,2)
-            for (i in c(1:2)){
-                mod <- get(paste0('mod',si[i])); KM <- get(paste0('KM',si[i]));
-                if(!KM){ 
-                    SHAT[i,] <- getsurv(survfit(mod,newdata=sdata[i,]),evaltimes)
-                    prob[i] <- getsurv(survfit(mod,newdata=sdata[i,]),changepoint)
-                } else{ 
-                    SHAT[i,]<- getsurv(survfit(mod),evaltimes) 
-                    prob[i] <- getsurv(survfit(mod),changepoint)
-                }
-            }
-            Shat <- c(SHAT[1,1:(changepoint_timeidx-1)], SHAT[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
-
-            # True S
-            STRUE <- matrix(0,nrow=2,ncol=length(evaltimes))
-            prob <- rep(0,2)
-            for(i in c(1:2)){
-                tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
-                if (dist=='exponential'){
-                    STRUE[i,] <- exp(-tmpebx*evaltimes*parms$lambda)
-                    prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
-                } else if (dist=='weibulld' | dist=='weibulli'){
-                    STRUE[i,] <- exp(-(evaltimes/parms$beta)^(parms$alp) * tmpebx)
-                    prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
-                } 
-            }
-
-            Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
-                      STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
-
-
-            scores <- (Shat - Strue)^2
-            ISE <- ISE + sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes)) / diff(range(evaltimes))
-        }
-    }
-
-    ISE <- ISE / length(unique(data$ID))
-
-    # ---------- ISE out of sample
-    evaltimes_test <- seq(from=min(data_test$time_Y),to=max(data_test$time_Y),length.out=ntimes)
-    ISE_test <- 0
-
-    for (x in unique(data_test$ID)){
-        sdata <- subset(data_test,ID==x)
-        sg <- subset(g_test, data_test$ID==x)
-        si <- subset(idx_test, data_test$ID==x)
-
-        changepoint <- sdata$time_Y[1]
-        changepoint_timeidx <-  which(changepoint < evaltimes_test)[1]
-
-        if(nrow(sdata)==1){
-            mod <- get(paste0('mod',si));
-            KM <- get(paste0('KM',si));
-            ISE_test <- ISE_test + get_tree_ISE(mod, sdata, sg, evaltimes_test, dist, slopes,parms,KM)
-        } else {
-            SHAT <- matrix(0,nrow=2,ncol=ntimes)
-            prob <- rep(0,2)
-            for (i in c(1:2)){
-                mod <- get(paste0('mod',si[i])); KM <- get(paste0('KM',si[i]));
-                if(!KM){ 
-                    SHAT[i,] <- getsurv(survfit(mod,newdata=sdata[i,]),evaltimes_test)
-                    prob[i] <- getsurv(survfit(mod,newdata=sdata[i,]),changepoint)
-                } else{ 
-                    SHAT[i,]<- getsurv(survfit(mod),evaltimes_test) 
-                    prob[i] <- getsurv(survfit(mod),changepoint)
-                }
-            }
-            Shat <- c(SHAT[1,1:(changepoint_timeidx-1)], SHAT[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
-
-            # True S
-            STRUE <- matrix(0,nrow=2,ncol=ntimes)
-            prob <- rep(0,2)
-            for(i in c(1:2)){
-                tmpebx <- exp(sum(slopes[sg[i],] * sdata[i,c('X3','X4','X5')]))
-                if (dist=='exponential'){
-                    STRUE[i,] <- exp(-tmpebx*evaltimes_test*parms$lambda)
-                    prob[i] <- exp(-tmpebx*changepoint*parms$lambda)
-                } else if (dist=='weibulld' | dist=='weibulli'){
-                    STRUE[i,] <- exp(-(evaltimes_test/parms$beta)^(parms$alp) * tmpebx)
-                    prob[i] <- exp(-(changepoint/parms$beta)^(parms$alp) * tmpebx)
-                } 
-            }
-
-            Strue<- c(STRUE[1,1:(changepoint_timeidx-1)], 
-                      STRUE[2,(changepoint_timeidx:ntimes)]*prob[1]/prob[2])
-
-            scores <- (Shat - Strue)^2
-            ISE_test <- ISE_test + sum(0.5*(scores[-1]+scores[-ntimes]) * diff(evaltimes_test)) / diff(range(evaltimes_test))
-        }
-    }
-
-    ISE_test <- ISE_test / length(unique(data_test$ID))
-
-    # ---------- Biomarker Prediction
-    data$idx <- factor(idx)
-    data_test$idx <- factor(idx_test); data_test$ID <- 0
-
-    if(length(unique(idx))==1){
-        #        ymod <- lm(y ~ idx, data=data)
-        ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|ID), data=data)
-    } else {
-        #        ymod <- lmer(y ~ idx + (1|ID),data=data)
-        ymod <- lmer(y ~ X1+X2+X3+X4+X5+(1|idx) + (1|ID),data=data)
-    }
-    predy<- predict(ymod); predy_test <- predict(ymod,newdata=data_test, allow.new.levels=TRUE)
-    MSE_y <- mean((predy - data$y)^2); MSE_y_test <- mean((predy_test - data_test$y)^2)
-
-    # purity
-    tmptable <- table(idx, g)
-    purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs
-
-    tmptable <- table(idx_test, g_test)
-    purity_test <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs_test
-
-    return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y,purity=purity,
-                   ISE_test=ISE_test, MSE_y_test = MSE_y_test,purity_test=purity_test),4))
 }
 
 
@@ -1041,94 +613,10 @@ eval_lcmm_pred_inout_timevar <- function
 
 
 
-
-
-
-get_pred_curv <- function(obj, newdata, evaltimes){
-    neval <- length(evaltimes)
-    ret <- matrix(0,nrow=neval, ncol=nrow(newdata))
-    newdata_id <- unique(newdata$id)
-
-    if(class(obj) == 'survreg'){
-        pct <- 1:999/1000
-        for (j in newdata_id){
-            tmpidx <- newdata$id == j
-            tmpdata <-newdata[tmpidx,]
-            ntmp <- sum(tmpidx)
-            tmpdata$tstop[ntmp] <- max(evaltimes)
-
-            ptime <- predict(obj, newdata=tmpdata, type='quantile',p=pct)
-            tmpsurv <- matrix(0,nrow=neval,ncol=ntmp)
-            if(ntmp==1){
-                fakeobj <- list(surv = 1-pct, time=ptime);class(fakeobj) <- 'survfit'
-                tmpsurv[,1] <- getsurv(fakeobj, evaltimes)
-                ret[,tmpidx] <- tmpsurv
-            } else {
-                for (z in seq_len(ntmp)){
-                    fakeobj <- list(surv = 1-pct, time=ptime[z,]);class(fakeobj) <- 'survfit'
-                    tmpsurv[,z] <- getsurv(fakeobj, evaltimes)
-                }
-                final_curv <- agg_curv(tmpsurv, evaltimes, tmpdata$tstop, evaltimes)
-                ret[,tmpidx] <- rep(final_curv, ntmp)
-            }
-        }
-    } else if (class(obj) == 'coxph'){
-        # obj is fit with strata
-        # use individual=TRUE to automatically aggregate across pseudo-subjects.
-        for (j in newdata_id){
-            tmpidx <- newdata$id == j
-            tmpdata <- newdata[tmpidx,]
-            ntmp <- sum(tmpidx)
-            tmpdata$tstop[ntmp] <- max(evaltimes)
-
-            if(ntmp==1){ survfitmod <- survfit(obj, newdata = tmpdata,id='class')
-            } else { 
-                survfitmod <- survfit(obj, newdata = tmpdata,individual=TRUE) 
-                survfitmod$time <- survfitmod$time+tmpdata[1,tstart]
-            }
-            final_curv <- getsurv(survfitmod, evaltimes)
-            ret[, tmpidx] <- rep( final_curv, ntmp)
-        }
-    } else if (class(obj)=='coxph.null'){
-        final_curv <- getsurv(survfit(obj),evaltimes)
-        ret <- rep(final_curv, nrow(newdata))
-    }
-    return (ret)
-}
-
-
-agg_curv <- function(surv, time, tstops, evaltimes){
-    ntmp <- length(tstops)
-
-    if (ntmp>1){
-        breaks <- c(-Inf,tstops[-ntmp],Inf)
-        cut_ret <- as.numeric(cut(time, breaks))
-        surv_ret <- c()
-        prevprob <- 1
-        currtimeidx <- 0
-        for(z in seq_len(ntmp)){
-            if(any(cut_ret==z)){
-                surv_ret <- c(surv_ret, surv[cut_ret==z,z]*prevprob)
-                currtimeidx <- max(which(cut_ret==z))
-                if (z < ntmp & currtimeidx < length(time)){
-                    if (surv[currtimeidx+1, z+1] < 1e-4){
-                        prevprob <- 0
-                    } else {prevprob <- prevprob*surv[currtimeidx+1,z]/surv[currtimeidx+1,z+1] }
-                }
-            }
-        }
-        fake_obj <- list(surv=surv_ret, time=time); class(fake_obj) <- 'survfit'
-        return(getsurv(fake_obj,evaltimes))
-    } else {
-        return(surv)
-    }
-}
-
-
 eval_tree_pred_inout_jlctree <- function
 (data, data_test, dist, slopes, parms, 
  idx, idx_test, 
- g, g_test, jlctree, timevar){
+ g, g_test, jlctreeobj, timevar){
 
     Nobs <- nrow(data); Nobs_test <- nrow(data_test)
 #    ebx <- exp(rowSums(slopes[g,] * data[,c('X3','X4','X5')]))
@@ -1136,51 +624,95 @@ eval_tree_pred_inout_jlctree <- function
 
     # ---------- Coxph Parameter 
     # get true survival prob
-    pred_parms <- matrix(0,nrow=Nobs,ncol=3)
     true_parms <- slopes[g,]
 
     # get pred survival prob
     pred_parms <- array(0, c(Nobs, ncol(true_parms), 3))
-    if(!is.null(jlctree$coxph_model_diffh_diffs)){
-        pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh_diffs)
+    se_parms <- array(0, c(Nobs, ncol(true_parms), 3))
+
+    if(!is.null(jlctreeobj$coxphmodel_diffh_diffs)){
+        pred_parms_raw <- get_cox_coef(jlctreeobj$coxphmodel_diffh_diffs)
         pred_parms[,,1] <- pred_parms_raw[as.character(idx),]
+
+        se_parms_raw <- get_cox_se(jlctreeobj$coxphmodel_diffh_diffs)
+        se_parms[,,1] <- se_parms_raw[as.character(idx),]
     }
-    if(!is.null(jlctree$coxph_model_diffh)){
-        pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffh)
+
+    if(!is.null(jlctreeobj$coxphmodel_diffh)){
+        pred_parms_raw <- get_cox_coef(jlctreeobj$coxphmodel_diffh)
         pred_parms[,,2] <- rep(pred_parms_raw, each = Nobs)
+
+        se_parms_raw <- get_cox_se(jlctreeobj$coxphmodel_diffh)
+        se_parms[,,2] <- rep(se_parms_raw, each = Nobs)
+
     }
-    if(!is.null(jlctree$coxph_model_diff)){
-        pred_parms_raw <- get_cox_coef(jlctree$coxph_model_diffs)
+    if(!is.null(jlctreeobj$coxphmodel_diffs)){
+        pred_parms_raw <- get_cox_coef(jlctreeobj$coxphmodel_diffs)
         pred_parms[,,3] <- pred_parms_raw[as.character(idx),]
+
+        se_parms_raw <- get_cox_se(jlctreeobj$coxphmodel_diffs)
+        se_parms[,,3] <- se_parms_raw[as.character(idx),]
     }
+
     MSE_b <- apply(pred_parms,3,function(x){mean(rowSums((true_parms-x)^2))})
+    CIcover  <-  rep(0,3)
+    for(i in c(1:3)){
+        CIcover[i]  <-  sum((true_parms < pred_parms[,,i] + 1.96*se_parms[,,i]) & 
+                            (true_parms > pred_parms[,,i] - 1.96*se_parms[,,i]))/ 
+        (nrow(true_parms)*ncol(true_parms))
+    }
+
+
+    # ---------- LMM parameters
+    if(1==0){
+    yslopes <- matrix(c(0,1,1,2, rep(0,20)), nrow=4)
+    true_parms <- yslopes[g,,drop=FALSE]
+
+    pred_parms <- array(0, c(Nobs, ncol(true_parms)))
+    ci_parms <- array(0, c(Nobs, ncol(true_parms), 2))
+
+    pred_parms_raw <- get_lmm_coef(jlctreeobj$lmmmodel)
+    pred_parms <- pred_parms_raw[as.character(idx),,drop=FALSE]
+
+    ci_parms_raw <- get_lmm_ci(jlctreeobj$lmmmodel)
+    ci_parms[,,1] <- (ci_parms_raw[[1]])[as.character(idx),,drop=FALSE]
+    ci_parms[,,2] <- (ci_parms_raw[[2]])[as.character(idx),,drop=FALSE]
+
+    MSE_beta <- mean(rowSums((true_parms-pred_parms)^2))
+    CIcover_beta  <-  sum((true_parms < ci_parms[,,2] ) & (true_parms > ci_parms[,,1] ))/ (nrow(true_parms)*ncol(true_parms))
+    }
 
     # ---------- Survival Prediction 
-    ISE <- c(get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffh, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
-             get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffh_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
-             get_tree_ISE_jlctree(data,idx,pseudo_g, jlctree$coxph_model_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar))
+#    ISE <- ISE_test <- c(0,0,0)
+    ISE <- c(get_tree_ISE_jlctree(data,idx,g, jlctreeobj$coxphmodel_diffh_diffs, slopes, parms, dist, timevar),
+             get_tree_ISE_jlctree(data,idx,g, jlctreeobj$coxphmodel_diffh, slopes, parms, dist, timevar),
+             get_tree_ISE_jlctree(data,idx,g, jlctreeobj$coxphmodel_diffs, slopes, parms, dist, timevar))
 
-    ISE_test <- c(get_tree_ISE_jlctree(data_test,idx_test,pseudo_g_test,jlctree$coxph_model_diffh, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
-                  get_tree_ISE_jlctree(data_test,idx_test,pseudo_g_test,jlctree$coxph_model_diffh_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar),
-                  get_tree_ISE_jlctree(data_test,idx_test,pseudo_g_test,jlctree$coxph_model_diffs, PARMS$slopes, PARMS$parms, FLAGS$dist, timevar))
+    ISE_test <- c(get_tree_ISE_jlctree(data_test,idx_test,g_test,jlctreeobj$coxphmodel_diffh_diffs, slopes, parms, dist, timevar),
+                  get_tree_ISE_jlctree(data_test,idx_test,g_test,jlctreeobj$coxphmodel_diffh, slopes, parms, dist, timevar),
+                  get_tree_ISE_jlctree(data_test,idx_test,g_test,jlctreeobj$coxphmodel_diffs, slopes, parms, dist, timevar))
 
 
     # ---------- Biomarker Prediction
-    predy <- predict(jlctree$lmm_model)
+    predy <- predict(jlctreeobj$lmmmodel)
     data_test$node <- as.factor(idx_test); data_test$ID <- 0
-    predy_test <- predict(jlctree$lmm_model,newdata=data_test,allow.new.levels=TRUE)
+    predy_test <- predict(jlctreeobj$lmmmodel,newdata=data_test,allow.new.levels=TRUE)
     MSE_y <- mean((predy - data$y)^2); MSE_y_test <- mean((predy_test - data_test$y)^2)
 
     # purity
     tmptable <- table(idx, g)
-    purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs
+    #purity <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs
+    purity <- sum(apply(tmptable,1,function(tb){ max(tb)}))/Nobs
 
     tmptable <- table(idx_test, g_test)
-    purity_test <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs_test
+    #purity_test <- sum(apply(tmptable,1,function(tb){ if(sum(tb>0)==1){sum(tb)} else {0}}))/Nobs_test
+    purity_test <- sum(apply(tmptable,1,function(tb){ max(tb)}))/Nobs_test
+
 
 
     return(round(c(ISE=ISE,MSE_b=MSE_b,MSE_y=MSE_y,purity=purity,
-                   ISE_test=ISE_test, MSE_y_test = MSE_y_test,purity_test=purity_test),4))
+                   ISE_test=ISE_test, MSE_y_test = MSE_y_test,purity_test=purity_test,
+                   CIcover=CIcover), 4))#, MSE_beta=MSE_beta, CIcover_beta=CIcover_beta),4))
 }
 
 
@@ -1193,12 +725,16 @@ get_cox_coef <- function(coxph_model){
         all_coef <- coef(coxph_model)
         nodes <- paste0('node',coxph_model$xlevels$node)
         all_coef[is.na(all_coef)] <- 0
+        whichnode  <- apply(array(names(all_coef)),1,function(x){
+                                y=strsplit(x,':')[[1]]
+                                ifelse(grepl('node',y[1]),y[1],y[2]) })
 
         baselevel <- nodes[1]
         base_parms <- all_coef[!grepl('node',names(all_coef))]
         pred_parms <- base_parms
         for (d in c(2:length(nodes))){
-            tmp_parms <- all_coef[grepl(nodes[d],names(all_coef))]
+            #tmp_parms <- all_coef[grepl(nodes[d],names(all_coef))]
+            tmp_parms <- all_coef[which(whichnode==nodes[d])]
             tmp_parms <- base_parms + tmp_parms[-1]+tmp_parms[1]
             pred_parms <- rbind(pred_parms, tmp_parms)
         }
@@ -1213,7 +749,7 @@ get_tree_ISE_jlctree <- function
 (data, idx, g, coxph_model, slopes, parms, dist, timevar, weighted=TRUE)
 {
     if(is.null(coxph_model)){
-        ISE <- 0
+        ISE <- 1
     } else {
         data$node <- as.factor(idx)
         SE <- rep(0,length(unique(data$ID)))
@@ -1281,6 +817,94 @@ get_true_surv <- function(slopes, parms, dist, data, evaltimes,timevar)
     }
 
    return(Strue)
+}
+
+get_cox_se <- function(coxph_model){
+    if(is.null(coxph_model$xlevels$node)){
+        se_parms  <- matrix(sqrt(diag(coxph_model$var)),nrow=1)
+        ## when there is one class, for consistency name it '1'
+        rownames(se_parms) <- '1'
+    } else {
+        all_coef <- coef(coxph_model)
+        nodes <- paste0('node',coxph_model$xlevels$node)
+
+        coefnames  <- names(all_coef)
+        varnames <- coefnames[!grepl('node',coefnames)]
+        all_var  <-  coxph_model$var
+        rownames(all_var)  <-  colnames(all_var)  <-  coefnames
+
+        baselevel <- nodes[1]
+        base_parms <- sqrt(diag(all_var[!grepl('node',coefnames),!grepl('node',coefnames)]))
+
+        se_parms <- matrix(0,nrow=length(nodes),ncol=length(varnames))
+        se_parms[1,] <- base_parms
+
+        for (d in c(2:length(nodes))){
+            for(k in seq_along(varnames)){
+                colstokeep <- which(coefnames %in% c(nodes[d], varnames[k], paste0(nodes[d],":",varnames[k]), paste0(varnames[k],":",nodes[d]) ))
+                se_parms[d,k]  <- sqrt(sum(all_var[colstokeep, colstokeep]))
+            }
+        }
+
+        rownames(se_parms) <- coxph_model$xlevels$node
+    }
+    return (se_parms)
+}
+
+
+ 
+
+get_lmm_coef <- function(model){
+    coef <- fixef(model)
+    nodecoef <- coef[ grepl('node', names(coef)) | grepl('Intercept',names(coef))]
+    nnode <- length(nodecoef)
+    ret <- matrix(0,nrow=nnode,ncol=1)
+    ret[,1] <- nodecoef
+    if(nnode==1){
+        rownames(ret) <- '1'
+    } else {
+        rownames(ret) <- gsub("factor\\(node\\)",'',names(nodecoef))
+    }
+    return (ret)
+}
+
+get_lmm_ci <- function(model){
+    ci <- confint(model)
+
+
+    # left
+    nodeci <- ci[ grepl('node', rownames(ci))|grepl('Intercept',rownames(ci)),1]
+    nnode <- length(nodeci)
+    left <- matrix(0,nrow=nnode,ncol=6)
+    Xci <- rep(0, 5); names(Xci) <- paste0('X',c(1:5))
+    Xci_tmp <- ci[ grepl('X', rownames(ci)),1]
+    Xci[names(Xci_tmp)] <- Xci_tmp
+    left[,-1] <- rep(Xci, each = nnode)
+    left[,1] <- nodeci
+    if (nnode==1){
+        rownames(left) <- '1'
+    } else {
+        rownames(left) <- gsub("factor\\(node\\)",'',names(nodeci))
+    }
+
+    # right
+    nodeci <- ci[ grepl('node', rownames(ci))|grepl('Intercept',rownames(ci)),2]
+    nnode <- length(nodeci)
+    right <- matrix(0,nrow=nnode,ncol=6)
+    Xci <- rep(0, 5); names(Xci) <- paste0('X',c(1:5))
+    Xci_tmp <- ci[ grepl('X', rownames(ci)),2]
+    Xci[names(Xci_tmp)] <- Xci_tmp
+    right[,-1] <- rep(Xci, each = nnode)
+
+    right[,1] <- nodeci
+    if(nnode==1){
+        rownames(right) <- '1'
+    } else {
+        rownames(right) <- gsub("factor\\(node\\)",'',names(nodeci))
+    }
+
+
+    return (list(left,right))
 }
 
 
