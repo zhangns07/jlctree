@@ -3,8 +3,7 @@ library(optparse)
 library(data.table)
 library(plyr)
 library(jlctree)
-source('0.init.R')
-source('../util.R')
+source('util.R')
 option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=500, help=""),
                     make_option(c("-c", "--censor"), type="numeric", default=0.2, help=""),
                     make_option(c("-d", "--dist"), type="character", default='exponential', help=""),

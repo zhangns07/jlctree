@@ -3,7 +3,7 @@ library(optparse)
 library(data.table)
 library(plyr)
 library(lcmm)
-source('0.init.R')
+source('util.R')
 option_list <- list(make_option(c("-N", "--Nsub"), type="numeric", default=100, help=""),
                     make_option(c("-c", "--censor"), type="numeric", default=0, help=""),
                     make_option(c("-d", "--dist"), type="character", default='exponential', help=""),

@@ -1,12 +1,10 @@
 library(optparse)
 library(data.table)
 library(plyr)
-library(lcmm)
 library(ggplot2)
 library(latex2exp)
 
-source('0.init.R')
-source('0.gen_survival.R')
+source('util.R')
 
 X1 <- runif(20000,min=0,max=1)
 X2 <- runif(20000,min=0,max=1)
@@ -116,53 +114,3 @@ dev.off()
 
 
 
-#----------
-# Random stuff
-load('../../explore/simulation/RData/main/Nsub_500_censor_0_dist_exponential_struct_tree_member_partition_alg_jlcmm_inter_TRUE_continuous_TRUE_ng_6_sim_1.RData')
-load('../../explore/simulation/RData/main/Nsub_500_censor_0_dist_exponential_struct_asym_member_partition_alg_jlcmm_inter_TRUE_continuous_TRUE_ng_6_sim_1.RData')
-load('../../explore/simulation/RData/main/Nsub_500_censor_0_dist_exponential_struct_quad_member_partition_alg_jlcmm_inter_TRUE_continuous_TRUE_ng_6_sim_1.RData')
-
-X1 <- runif(10000,min=0,max=1)
-X2 <- runif(10000,min=0,max=1)
-X3 <- as.numeric(runif(10000)>0.5)
-X4 <- round(runif(10000),1)
-X5 <- sample(c(1:5),10000,replace=TRUE)
-X <- cbind(X1,X2,X3,X4,X5)
-
-pred_gg <- apply(predict_class(m6,X),1,which.max)
-gg <- get_latent_class(X1,X2,'quad', 'partition', seed=1)
-table(gg,pred_gg)
-
-g <- ggplot()
-g <- g + geom_point(aes(x=X1,y=X2,color=factor(pred_gg)))
-print(g)
-
-
-obj <- m6
-nclasses <- ncol(obj$pprob)-2
-coefs <- obj$best
-coefend <- min(which(grepl('Weibull',names(coefs))))-1
-coefs_multilogit <- matrix(coefs[1:coefend],nrow=nclasses-1)
-tmpX <- cbind(1,newdata[,c('X1','X2','X3','X4','X5')])
-if (ncol(coefs_multilogit)==7){ tmpX <- cbind(tmpX,newdata[,'X1']*newdata[,'X2']) }
-
-linearval <- as.matrix(tmpX) %*% t(coefs_multilogit)
-test_class <- t(apply(linearval, 1,function(x){ exps=exp(c(x,0)); exps/sum(exps)}))
-
-
-data <- data.frame(cbind(X1,X2, y = as.numeric(linearval[,5]>0)))
-g <- ggplot(data)
-g <- g + geom_point(aes(x=X1,y=X2,color=factor(y)))
-print(g)
-
-
-
-X1 <- runif(10000,min=0,max=1)
-X2 <- runif(10000,min=0,max=1)
-gg <- get_latent_class(X1,X2,'asym', 'partition', seed=1)
-data <- data.frame(cbind(X1,X2,gg))
-ret <- rpart(gg ~ X1+X2, data)
-pdf('asym_tree.pdf')
-plot(ret,uniform=TRUE)
-text(ret)
-dev.off()
