@@ -1053,3 +1053,115 @@ sbrier <- function(obj, pred, btime = range(obj[,1]))
     }
     RET
 }
+
+
+gen_data_timemix <- function(FLAGS, PARMS, seed){
+
+    Nsub <- FLAGS$Nsub
+    censor_rate <- FLAGS$censor
+    dist <- FLAGS$dist
+    parms <- PARMS$parms; slopes <- PARMS$slopes; lam_D <- PARMS$lam_D
+    sd_ranef <- 0.2
+    sd_e <- 0.1
+
+    set.seed(seed)
+    # X1 - X5
+    if (FLAGS$continuous){
+        if(FLAGS$struct == 'linear'){
+            X1 <- round(runif(2*Nsub, min=1,max=3),2)
+            X2 <- round(runif(2*Nsub, min=1,max=3),2)
+            X1_next <- round(pmax(pmin(X1 + runif(2*Nsub, min=-0.6, max=0.6),3),1),2)
+            X2_next <- X2
+        } else {
+            X1 <- round(runif(2*Nsub),2)
+            X2 <- round(runif(2*Nsub),2)
+            X1_next <- round(pmax(pmin(X1 + runif(2*Nsub, min=-0.3, max=0.3),1),0),2)
+            X2_next <- X2
+        }
+    } 
+
+    X3 <- as.numeric(runif(2*Nsub)>0.5)
+    X4 <- round(runif(2*Nsub),1)
+    X5 <- sample(c(1:5),2*Nsub,replace=TRUE)
+
+    X3_next <- as.numeric(runif(2*Nsub)>0.5)
+    X4_next <- round(pmax(pmin(X4 + runif(2*Nsub, min=-0.3, max=0.3),1),0),1)
+    X5_next <- X5
+
+    if (FLAGS$majprob==1){
+        g <- get_latent_class(X1,X2,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
+        g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, 'partition', seed=seed, FLAGS$majprob)
+    } else {
+        g <- get_latent_class(X1,X2,FLAGS$struct, 'multinomial', seed=seed, FLAGS$majprob)
+        g_next <- get_latent_class(X1_next,X2_next,FLAGS$struct, 'multinomial', seed=seed, FLAGS$majprob)
+    }
+
+    X <- cbind(X1,X2,X3,X4,X5, X1_next, X2_next, X3_next, X4_next, X5_next)
+
+    ebx1 <- exp(rowSums(slopes[g,] * cbind(X3,X4,X5))) 
+    ebx2 <- exp(rowSums(slopes[g_next,] * cbind(X3_next,X4_next,X5_next))) 
+    ebx <- cbind(ebx1,ebx2)
+    changepoint <- runif(2*Nsub, min=1,max=3)
+    time_T <- gen_model_timevar_survival(ebx,dist,parms,changepoint)
+    time_L <- runif(2*Nsub, min=0, max=1)
+
+    time_tokeep <- time_L < time_T
+    time_L <- time_L[time_tokeep][1:Nsub]
+    time_T <- time_T[time_tokeep][1:Nsub]
+    X <- X[time_tokeep,][1:Nsub,]
+    g <- g[time_tokeep][1:Nsub]
+    g_next <- g_next[time_tokeep][1:Nsub]
+    ebx <- ebx[time_tokeep,][1:Nsub,]
+    changepoint <- changepoint[time_tokeep][1:Nsub]
+
+    if (censor_rate==0){ 
+        time_C <- Inf
+    } else{
+        time_C <- time_L + rexp(Nsub,lam_D[[censor_rate]][g])
+    }
+
+    delta <- as.numeric(time_C >= time_T)
+    time_Y <- pmin(time_T, time_C)
+
+    LTRC_data <- ldply(array(seq_len(Nsub)),function(i){
+                           if(changepoint[i] < time_Y[i]){
+                               tmp_time <- c(time_L[i],changepoint[i],time_Y[i])
+                               num_i <- 2
+                           } else{
+                               tmp_time <- c(time_L[i],time_Y[i])
+                               num_i <- 1
+                           }
+                           if (FLAGS$alg == 'jlctree'){
+                               tmp_time_L <- tmp_time[1:num_i]
+                               tmp_time_Y <- tmp_time[-1]
+                               tmp_delta <- c(rep(0,num_i-1),delta[i])
+                               ret <- cbind(ID=i, 
+                                            X1=c(X[i,1], X[i,6])[1:num_i], X2=c(X[i,2],X[i,7])[1:num_i],
+                                            X3=c(X[i,3], X[i,8])[1:num_i], X4=c(X[i,4],X[i,9])[1:num_i],
+                                            X5=c(X[i,5], X[i,10])[1:num_i])
+
+                           } else if (FLAGS$alg == 'jlcmm'){
+                               tmp_time_L <- rep(time_L[i],num_i)
+                               tmp_time_Y <- rep(time_Y[i],num_i)
+                               tmp_delta <- rep(delta[i],num_i)
+                               tmp_changepoint <- rep(changepoint[i], num_i)
+                               ret <- cbind(ID=i, changepoint=tmp_changepoint,
+                                            X1=rep(X[i,1], num_i), X2=rep(X[i,2],num_i),
+                                            X3=rep(X[i,3], num_i), X4=rep(X[i,4],num_i),X5=rep(X[i,5],num_i),
+                                            X3_true=c(X[i,3], X[i,8])[1:num_i], X4_true=c(X[i,4],X[i,9])[1:num_i],
+                                            X5_true=c(X[i,5], X[i,10])[1:num_i])
+
+                           }
+
+                           ret <- cbind(ret, g = c(g[i],g_next[i])[1:num_i],
+                                        time_L=tmp_time_L, time_Y=tmp_time_Y, delta=tmp_delta)})
+
+    ranef <- rnorm(Nsub, sd=sd_ranef)
+    ranefs <- ranef[LTRC_data$ID]
+    fixef <- c(0,1,1,2)
+    pseudo_g <- LTRC_data$g
+    y <- fixef[pseudo_g] + ranefs + rnorm(nrow(LTRC_data), sd=sd_e) 
+    data <- cbind(LTRC_data,y)
+
+    return(list(data=data,pseudo_g=pseudo_g))
+}
