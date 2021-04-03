@@ -4,6 +4,8 @@ library(lcmm)
 library(ipred)
 library(prodlim)
 library(jlctree)
+library(jlctree)
+
 library("NormPsy")
 source('../simulation/util.R')
 
@@ -277,7 +279,6 @@ tree_inv <- jlctree(survival=Surv(tstart, tstop, death)~CEP+male,
                 classmb=~CEP+male,
                 fixed=normMMSE~CEP+poly(age65, degree=2, raw=TRUE),
                 random=~poly(age65, degree=2, raw=TRUE),
-                greedy=TRUE, maxng=6,
                 subject='id',data=data,
                 parms=list(min_nevent=2,stop_thre=3.84,stable=TRUE))
 tree_inv$tree
@@ -288,7 +289,6 @@ tree_mid <- jlctree(survival=Surv(tstart, tstop, death)~CEP+male+
                 classmb=~CEP+male+age_one+BVRT_one+IST_one+HIER_one+CESD_one,
                 fixed=normMMSE~CEP+poly(age65, degree=2, raw=TRUE),
                 random=~poly(age65, degree=2, raw=TRUE),
-                greedy=TRUE,
                 subject='id',data=data,
                 parms=list(min_nevent=5,stop_thre=3.84,stable=TRUE))
 tree_mid$tree
@@ -312,8 +312,8 @@ tree_var <- jlctree(survival=Surv(tstart, tstop, death)~CEP+male+
                 fixed=normMMSE~CEP+poly(age65, degree=2, raw=TRUE),
                 random=~poly(age65, degree=2, raw=TRUE),
                 subject='id',data=data,
-                #control=list(cp--Inf)
-                parms=list(min.nevents=5,stop.thre=6.63,stable=TRUE))
+#                control=list(cp=-Inf),
+                parms=list(min.nevents=5,stop.thre=3.84,stable=TRUE))
 tree_var$tree
 
 

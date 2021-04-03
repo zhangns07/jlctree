@@ -118,6 +118,14 @@ jlctree <- function
                      paste0(as.character(classmb), collapse=''))
     rparty <- model.frame(formula(rpartf), data=data)
 
+    # standardize covariates for splitting related coxph model fitting, 
+    # so we can ignore coxph fittings with too high variances. 
+    if (parms$stable){
+        start_col <- 3+as.numeric(parms$LTRC)
+        end_col <- ncol(rparty[,1])
+        rparty[,1][,c(start_col:end_col)] <- scale(rparty[,1][,c(start_col:end_col)])
+    }
+
     # rpart only takes in numerical parameters
     parms$lrt <- (parms$test.stat=='lrt')
     parms$test.stat <- NULL
