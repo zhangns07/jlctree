@@ -18,7 +18,8 @@
 #'      Set \code{split.add} to a large positive value for the purpose of greedy splitting. 
 #'      Default is 20.
 #' @param cov.max upper bound on the variance of the estimated coefficients 
-#'      in survival models at tree nodes. Default is 1e5. 
+#'      in survival models at tree nodes. The covariates will be scaled to have unit variance.
+#'      Default is 1e5. 
 #' @param fity if TRUE, once a tree is constructed, fit a linear mixed-effects model using 
 #'      tree nodes as group indicators. Default is TRUE.
 #' @param fits if TRUE, once a tree is constructed, fit survival models using tree nodes

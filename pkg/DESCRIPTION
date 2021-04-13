@@ -1,7 +1,7 @@
 Package: jlctree
 Title: Joint Latent Class Trees for Joint Modeling of Time-to-Event and Longitudinal Data
-Date: 2018-11-20
-Version: 0.0.1
+Date: 2021-04-12
+Version: 0.0.2
 Author: Ningshan Zhang and Jeffrey S. Simonoff
 Maintainer: Ningshan Zhang <nzhang@stern.nyu.edu>
 Depends: survival, rpart, lme4
